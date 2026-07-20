@@ -1,0 +1,26 @@
+.env
+.venv
+env/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+results/
+*.log
+.DS_Store
+.vscode/
+.idea/
+*.iml
+
+# Reports are served from an orphan gh-pages branch pushed from this folder
+# (see docs/PUBLISHING.md). Keep it out of the main source branch.
+site/
+
+# Internal API-discovery notes - kept local only, never published to the public repo.
+docs/discovered_api_endpoints.md
+docs/unique_api_endpoints.txt
+docs/discovered_selectors.txt
+docs/QUICK_REFERENCE.md
+docs/WORKFLOW_UPDATE_SUMMARY.md
