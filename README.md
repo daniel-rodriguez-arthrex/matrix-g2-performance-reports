@@ -1,7 +1,7 @@
 
 # Matrix G2 Performance Test Suite: 
 
-## Link to Report: https://daniel-rodriguez-arthrex.github.io/matrix-g2-performance-reports/
+Link to Report: https://daniel-rodriguez-arthrex.github.io/matrix-g2-performance-reports/
 
 Standalone Python + Playwright performance testing and API discovery tool for Matrix G2 workflows.
 
