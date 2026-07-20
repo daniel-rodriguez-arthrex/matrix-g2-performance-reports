@@ -36,6 +36,25 @@ _STATUS_RE = re.compile(r"<h3>Status</h3>\s*<div class=\"value (status-pass|stat
 _ACTIONS_RE = re.compile(r"<h2>Actions \((\d+)/(\d+) successful\)</h2>")
 
 
+def _card_value(html: str, heading: str) -> str:
+    """Extract a summary-card value (e.g. '96ms', '0') by its <h3> heading."""
+    m = re.search(
+        r"<h3>" + re.escape(heading) + r"</h3>\s*<div class=\"value[^\"]*\">\s*([^<\s][^<]*?)\s*</div>",
+        html,
+    )
+    return m.group(1).strip() if m else ""
+
+
+def _friendly_date(timestamp: str) -> str:
+    """Turn '2026-07-20T09:19:13' into 'Jul 20, 2026' (falls back to raw input)."""
+    for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(timestamp, fmt).strftime("%b %d, %Y")
+        except ValueError:
+            continue
+    return timestamp
+
+
 def _extract_metadata(html: str, slug: str) -> dict:
     """Pull display metadata from the (already sanitized) report HTML."""
     workflow, room, timestamp = "", "", ""
@@ -59,9 +78,14 @@ def _extract_metadata(html: str, slug: str) -> dict:
         "workflow": workflow,
         "room": room,
         "timestamp": timestamp,
+        "date": _friendly_date(timestamp),
         "status": status,
         "actions_passed": actions_passed,
         "actions_total": actions_total,
+        "avg_api": _card_value(html, "Avg API Time"),
+        "p95_api": _card_value(html, "P95 API Time"),
+        "workflow_api_calls": _card_value(html, "Workflow API Calls"),
+        "errors": _card_value(html, "Errors"),
         "published_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
     }
 
@@ -103,70 +127,97 @@ def _load_all_reports(site_dir: Path) -> list:
     return reports
 
 
-def _render_index(reports: list) -> str:
-    cards = []
-    for r in reports:
-        title = r.get("title") or f"{(r.get('workflow') or 'Report').upper()} — Room {r.get('room','')}"
-        status = r.get("status", "UNKNOWN")
-        badge_class = "badge-pass" if status == "PASS" else "badge-fail" if status == "FAIL" else "badge-unknown"
-        actions = f"{r.get('actions_passed', 0)}/{r.get('actions_total', 0)} actions"
-        slug = r.get("slug", "")
-        cards.append(f"""
-        <div class="card">
-            <div class="card-head">
-                <span class="badge {badge_class}">{status}</span>
-                <span class="card-date">{r.get('timestamp','')}</span>
-            </div>
-            <h3>{title}</h3>
-            <div class="card-meta">{actions} &bull; published {r.get('published_at','')}</div>
-            <div class="card-links">
-                <a class="btn" href="reports/{slug}/report.html">View Report &rarr;</a>
-                <a class="btn btn-ghost" href="reports/{slug}/report.pdf">PDF</a>
-            </div>
-        </div>""")
+def _metric_cell(label: str, value: str) -> str:
+    return (
+        f'<div class="metric"><span class="m-label">{label}</span>'
+        f'<span class="m-value">{value or "&mdash;"}</span></div>'
+    )
 
+
+def _render_card(r: dict) -> str:
+    title = r.get("title") or f"{(r.get('workflow') or 'Report').upper()} - Room {r.get('room','')}"
+    status = r.get("status", "UNKNOWN")
+    badge_class = {"PASS": "badge-pass", "FAIL": "badge-fail"}.get(status, "badge-unknown")
+    slug = r.get("slug", "")
+
+    metrics = "".join([
+        _metric_cell("Room", r.get("room", "")),
+        _metric_cell("Workflow", r.get("workflow", "")),
+        _metric_cell("Date", r.get("date") or r.get("timestamp", "")),
+        _metric_cell("Actions", f"{r.get('actions_passed', 0)}/{r.get('actions_total', 0)}"),
+        _metric_cell("Avg API", r.get("avg_api", "")),
+        _metric_cell("P95 API", r.get("p95_api", "")),
+    ])
+    return f"""
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">{title}</span>
+                <span class="badge {badge_class}">{status}</span>
+            </div>
+            <div class="card-body">
+                <div class="metrics">{metrics}</div>
+                <a class="btn" href="reports/{slug}/report.html">View Full Report &rarr;</a>
+                <a class="pdf-link" href="reports/{slug}/report.pdf">Download PDF</a>
+            </div>
+        </div>"""
+
+
+def _render_index(reports: list) -> str:
+    cards = "".join(_render_card(r) for r in reports)
     empty = "" if cards else '<p class="empty">No reports published yet.</p>'
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Matrix G2 Performance Reports</title>
+    <title>Matrix G2 Performance Hub</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 2rem 1rem; color: #2d3748; }}
-        .container {{ max-width: 1100px; margin: 0 auto; }}
-        .hero {{ color: #fff; padding: 1rem 0 2rem; }}
-        .hero h1 {{ font-size: 2.5rem; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 0.5rem; }}
-        .hero p {{ opacity: 0.9; font-size: 1.05rem; }}
-        .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem; margin-top: 1.5rem; }}
-        .card {{ background: #fff; border-radius: 14px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.15); transition: transform 0.2s, box-shadow 0.2s; }}
-        .card:hover {{ transform: translateY(-3px); box-shadow: 0 16px 40px rgba(0,0,0,0.22); }}
-        .card-head {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }}
-        .card h3 {{ font-size: 1.15rem; font-weight: 700; margin-bottom: 0.4rem; }}
-        .card-meta {{ font-size: 0.8rem; color: #718096; margin-bottom: 1.1rem; }}
-        .card-date {{ font-size: 0.75rem; color: #a0aec0; }}
-        .badge {{ display: inline-block; padding: 0.3rem 0.7rem; border-radius: 6px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }}
-        .badge-pass {{ background: #c6f6d5; color: #22543d; }}
-        .badge-fail {{ background: #fed7d7; color: #742a2a; }}
+        body {{ font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #eef1f5; color: #1a202c; }}
+        .hub-header {{ background: linear-gradient(120deg, #1a2233 0%, #2b3a55 100%); color: #fff; padding: 2rem 1.5rem; }}
+        .hub-header-inner {{ max-width: 1080px; margin: 0 auto; display: flex; align-items: center; gap: 1rem; }}
+        .hub-header h1 {{ font-size: 1.75rem; font-weight: 800; letter-spacing: -0.3px; }}
+        .hub-header p {{ opacity: 0.8; font-size: 0.95rem; margin-top: 0.2rem; }}
+        .container {{ max-width: 1080px; margin: 0 auto; padding: 2rem 1.5rem 3rem; }}
+        .section-label {{ font-size: 0.72rem; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #8a93a2; margin-bottom: 1rem; }}
+        .grid {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 1.5rem; }}
+        .card {{ background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 14px rgba(20,30,50,0.08); transition: transform 0.15s, box-shadow 0.15s; }}
+        .card:hover {{ transform: translateY(-2px); box-shadow: 0 10px 26px rgba(20,30,50,0.14); }}
+        .card-header {{ background: linear-gradient(120deg, #1f2a3d 0%, #2b3a55 100%); color: #fff; padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }}
+        .card-title {{ font-size: 1.02rem; font-weight: 700; }}
+        .badge {{ display: inline-block; padding: 0.3rem 0.6rem; border-radius: 5px; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }}
+        .badge-pass {{ background: #d1f4dd; color: #1a7a42; }}
+        .badge-fail {{ background: #fdd8d8; color: #b02525; }}
         .badge-unknown {{ background: #e2e8f0; color: #4a5568; }}
-        .card-links {{ display: flex; gap: 0.6rem; }}
-        .btn {{ flex: 1; text-align: center; text-decoration: none; padding: 0.6rem 1rem; border-radius: 8px; font-weight: 700; font-size: 0.85rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; }}
-        .btn-ghost {{ flex: 0 0 auto; background: #edf2f7; color: #4a5568; }}
-        .empty {{ color: #fff; opacity: 0.9; margin-top: 1rem; }}
-        .footer {{ color: #fff; opacity: 0.75; font-size: 0.8rem; margin-top: 2.5rem; text-align: center; }}
+        .card-body {{ padding: 1.25rem; }}
+        .metrics {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 1.1rem; }}
+        .metric {{ background: #f4f6f9; border-radius: 8px; padding: 0.7rem 0.8rem; display: flex; flex-direction: column; gap: 0.25rem; }}
+        .m-label {{ font-size: 0.62rem; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: #8a93a2; }}
+        .m-value {{ font-size: 0.98rem; font-weight: 700; color: #1a202c; }}
+        .btn {{ display: block; text-align: center; text-decoration: none; padding: 0.7rem 1rem; border-radius: 8px; font-weight: 700; font-size: 0.9rem; background: #2563eb; color: #fff; }}
+        .btn:hover {{ background: #1d4ed8; }}
+        .pdf-link {{ display: block; text-align: center; margin-top: 0.6rem; font-size: 0.8rem; font-weight: 600; color: #64748b; text-decoration: none; }}
+        .pdf-link:hover {{ color: #2563eb; }}
+        .empty {{ color: #64748b; }}
+        .footer {{ max-width: 1080px; margin: 0 auto; padding: 0 1.5rem 2rem; color: #8a93a2; font-size: 0.78rem; }}
+        @media (max-width: 520px) {{ .grid {{ grid-template-columns: 1fr; }} }}
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="hero">
-            <h1>Matrix G2 Performance Reports</h1>
-            <p>Automated workflow performance runs. Internal network details are redacted for public sharing.</p>
+    <header class="hub-header">
+        <div class="hub-header-inner">
+            <div>
+                <h1>Matrix G2 Performance Hub</h1>
+                <p>Automated workflow performance results &mdash; internal network details redacted</p>
+            </div>
         </div>
-        <div class="grid">{''.join(cards)}</div>
+    </header>
+    <main class="container">
+        <div class="section-label">Test Reports</div>
+        <div class="grid">{cards}</div>
         {empty}
-        <div class="footer">Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</div>
-    </div>
+    </main>
+    <div class="footer">Generated {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}</div>
 </body>
 </html>"""
 
