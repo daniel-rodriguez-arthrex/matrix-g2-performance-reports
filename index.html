@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix G2 Performance Reports</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 2rem 1rem; color: #2d3748; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        .hero { color: #fff; padding: 1rem 0 2rem; }
+        .hero h1 { font-size: 2.5rem; font-weight: 800; letter-spacing: -0.5px; margin-bottom: 0.5rem; }
+        .hero p { opacity: 0.9; font-size: 1.05rem; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.25rem; margin-top: 1.5rem; }
+        .card { background: #fff; border-radius: 14px; padding: 1.5rem; box-shadow: 0 10px 30px rgba(0,0,0,0.15); transition: transform 0.2s, box-shadow 0.2s; }
+        .card:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(0,0,0,0.22); }
+        .card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+        .card h3 { font-size: 1.15rem; font-weight: 700; margin-bottom: 0.4rem; }
+        .card-meta { font-size: 0.8rem; color: #718096; margin-bottom: 1.1rem; }
+        .card-date { font-size: 0.75rem; color: #a0aec0; }
+        .badge { display: inline-block; padding: 0.3rem 0.7rem; border-radius: 6px; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge-pass { background: #c6f6d5; color: #22543d; }
+        .badge-fail { background: #fed7d7; color: #742a2a; }
+        .badge-unknown { background: #e2e8f0; color: #4a5568; }
+        .card-links { display: flex; gap: 0.6rem; }
+        .btn { flex: 1; text-align: center; text-decoration: none; padding: 0.6rem 1rem; border-radius: 8px; font-weight: 700; font-size: 0.85rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; }
+        .btn-ghost { flex: 0 0 auto; background: #edf2f7; color: #4a5568; }
+        .empty { color: #fff; opacity: 0.9; margin-top: 1rem; }
+        .footer { color: #fff; opacity: 0.75; font-size: 0.8rem; margin-top: 2.5rem; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hero">
+            <h1>Matrix G2 Performance Reports</h1>
+            <p>Automated workflow performance runs. Internal network details are redacted for public sharing.</p>
+        </div>
+        <div class="grid">
+        <div class="card">
+            <div class="card-head">
+                <span class="badge badge-pass">PASS</span>
+                <span class="card-date">2026-07-20T09:19:13</span>
+            </div>
+            <h3>Full Suite — OR1</h3>
+            <div class="card-meta">43/43 actions &bull; published 2026-07-20 19:12 UTC</div>
+            <div class="card-links">
+                <a class="btn" href="reports/all_OR1_2026-07-20_09-17-33/report.html">View Report &rarr;</a>
+                <a class="btn btn-ghost" href="reports/all_OR1_2026-07-20_09-17-33/report.pdf">PDF</a>
+            </div>
+        </div></div>
+        
+        <div class="footer">Generated 2026-07-20 19:12 UTC</div>
+    </div>
+</body>
+</html>

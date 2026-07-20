@@ -1,0 +1,11 @@
+{
+  "slug": "all_OR1_2026-07-20_09-17-33",
+  "workflow": "ALL",
+  "room": "OR1",
+  "timestamp": "2026-07-20T09:19:13",
+  "status": "PASS",
+  "actions_passed": 43,
+  "actions_total": 43,
+  "published_at": "2026-07-20 19:12 UTC",
+  "title": "Full Suite \u2014 OR1"
+}

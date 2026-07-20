@@ -1,0 +1,25 @@
+# This directory is the PUBLIC GitHub Pages repo. Only sanitized reports belong here:
+#   index.html, reports/<slug>/report.html, reports/<slug>/report.pdf, reports/<slug>/meta.json
+#
+# The rules below are a defensive guard: even if a raw artifact is ever copied in by
+# mistake, it will never be committed/published.
+
+# Secrets - must never appear here
+.env
+.env.*
+*.key
+*.pem
+
+# Raw run artifacts (contain response bodies, tokens, internal IPs) - never publish
+*.csv
+*.log
+api_calls*
+ui_timings*
+endpoints*
+selectors*
+summary*.csv
+
+# Local/dev noise
+__pycache__/
+.DS_Store
+_*.png
