@@ -1,0 +1,16 @@
+{
+  "slug": "all_OR1_2026-07-22_08-27-04",
+  "workflow": "ALL",
+  "room": "OR1",
+  "timestamp": "2026-07-22T08:28:43",
+  "date": "Jul 22, 2026",
+  "status": "PASS",
+  "actions_passed": 32,
+  "actions_total": 32,
+  "avg_api": "137ms",
+  "p95_api": "2058ms",
+  "workflow_api_calls": "44",
+  "errors": "0",
+  "published_at": "2026-07-22 16:06 UTC",
+  "title": "Full Suite - OR1 - Jul 22, 2026"
+}
