@@ -1,16 +1,16 @@
 {
-  "slug": "all_OR1_2026-07-27_15-41-41",
+  "slug": "all_OR1_2026-07-27_15-52-54",
   "workflow": "ALL",
   "room": "OR1",
-  "timestamp": "2026-07-27T15:42:41",
+  "timestamp": "2026-07-27T15:53:46",
   "date": "Jul 27, 2026",
   "status": "FAIL",
   "actions_passed": 47,
   "actions_total": 47,
-  "avg_api": "114ms",
-  "p95_api": "2060ms",
+  "avg_api": "99ms",
+  "p95_api": "2108ms",
   "workflow_api_calls": "59",
-  "errors": "8",
-  "published_at": "2026-07-27 22:46 UTC",
+  "errors": "7",
+  "published_at": "2026-07-27 22:54 UTC",
   "title": "Full Suite - OR1 - Jul 27, 2026"
 }
