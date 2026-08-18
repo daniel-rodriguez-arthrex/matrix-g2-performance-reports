@@ -130,6 +130,9 @@ class MatrixClient:
     def post(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         return self._send_with_retry("POST", self._url(path), json=payload)
 
+    def put(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return self._send_with_retry("PUT", self._url(path), json=payload)
+
     # ---- Action helpers: get current state ----
 
     def get_displays(self) -> List[Dict[str, Any]]:
@@ -144,6 +147,16 @@ class MatrixClient:
     def update_room_settings(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Partial update to room settings (rename displays/speakers/sources, toggle layout capabilities)."""
         return self.post("api/room/settings", payload)
+
+    def get_room(self) -> Dict[str, Any]:
+        """Full room config: roomId, externalApps, primaryCameraId, cameras[], visionConsoles[].
+        Contains secrets (admin password hash) - do not log/export the raw response."""
+        return self.get("api/room") or {}
+
+    def get_room_list(self) -> List[Dict[str, Any]]:
+        """List of all rooms on the site: roomId, name, port, externalApiURL. Used to pick a
+        target room for source sharing."""
+        return self.get("api/room/list") or []
 
     def get_audio_sources(self) -> List[Dict[str, Any]]:
         return self.get("api/devices/audioSources") or []
@@ -215,12 +228,73 @@ class MatrixClient:
         }
         return self.post(f"api/devices/speakers/{speaker_id}/changeVolume", payload)
 
+    def share_source(
+        self,
+        source_id: str,
+        source_room: str,
+        requesting_room: str,
+        status: str = "grant",
+        expires: str = "indefinite",
+    ) -> Dict[str, Any]:
+        """Grant or revoke sharing of a video/audio source with another room.
+
+        Confirmed via passive capture (POST /api/room/share, network.Share command).
+        `expires` is only sent for grants - the confirmed revoke payload omits it.
+        """
+        params: Dict[str, Any] = {
+            "sourceId": source_id,
+            "sourceRoom": source_room,
+            "requestingRoom": requesting_room,
+            "status": status,
+        }
+        if status == "grant":
+            params["expires"] = expires
+        payload = {"command": "network.Share", "params": params}
+        return self.post("api/room/share", payload)
+
+    def test_camera_connection(
+        self, camera_id: str, endpoint: str, username: str, password: str
+    ) -> Dict[str, Any]:
+        """Test connectivity to the room camera at the given endpoint/credentials.
+        Confirmed payload shape via passive capture (POST /api/cameras/{id}/testConnection)."""
+        payload = {"endpoint": endpoint, "username": username, "password": password}
+        return self.post(f"api/cameras/{camera_id}/testConnection", payload)
+
     def call_room_preset(self, preset_index: str) -> Dict[str, Any]:
         payload = {
             "command": "rooms.preset.call",
             "params": {"presetIndex": preset_index},
         }
         return self.post("api/room/presets/call", payload)
+
+    def save_room_preset(self, preset_index: str, name: str) -> Dict[str, Any]:
+        """Save the room's current live routing/layout state as a preset at `preset_index`.
+
+        Confirmed via passive capture of the Presets page's "Save" flow
+        (POST /api/room/presets, rooms.preset.add command). If a preset already exists
+        at that index, this OVERWRITES its routing/layout with whatever is currently live,
+        keyed by the given name. This is the real "update this preset to current state" action
+        - not safe to fire with arbitrary/unknown live state for automated regression testing.
+        """
+        payload = {
+            "command": "rooms.preset.add",
+            "params": {"presetIndex": preset_index, "name": name},
+        }
+        return self.post("api/room/presets", payload)
+
+    def rename_room_preset(self, preset_index: str, name: str) -> Dict[str, Any]:
+        """Rename a preset without touching its saved routing/layout state.
+
+        Confirmed via passive capture: same command/payload shape as `save_room_preset`
+        (rooms.preset.add), but sent as PUT instead of POST - the device routes PUT to a
+        metadata-only rename (response "Preset renamed to X") instead of overwriting the
+        preset's routing with live state (response "New Preset added.").
+        """
+        payload = {
+            "command": "rooms.preset.add",
+            "params": {"presetIndex": preset_index, "name": name},
+        }
+        return self.put("api/room/presets", payload)
 
     def close(self) -> None:
         self.session.close()

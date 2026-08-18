@@ -25,6 +25,15 @@ class HtmlReport:
         output_path.write_text(html, encoding="utf-8")
         return output_path
 
+    def _friendly_timestamp(self, timestamp: str) -> str:
+        """Turn '2026-07-22T08:28:43' into 'Jul 22, 2026, 08:28 AM' (falls back to raw input)."""
+        for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(timestamp, fmt).strftime("%b %d, %Y, %I:%M %p")
+            except ValueError:
+                continue
+        return timestamp
+
     def _render(self, data: Dict[str, Any]) -> str:
         session = data.get("session", {})
         api_calls = data.get("api_calls", [])
@@ -38,7 +47,7 @@ class HtmlReport:
         # Filter and aggregate data
         meaningful_calls = self._filter_noise(api_calls)
         grouped_endpoints = self._group_endpoints(meaningful_calls)
-        violations = self._find_violations(meaningful_calls, summary.get("api_threshold_ms", 500))
+        violations = self._find_violations(meaningful_calls, summary.get("api_threshold_ms") or 500)
         app_ws_frames = self._filter_ws_noise(ws_frames)
 
         # Recompute validation/error/violation counts from meaningful calls so startup
@@ -50,7 +59,7 @@ class HtmlReport:
             c for c in meaningful_calls
             if c.get("error") or (c.get("status") and c.get("status") >= 400)
         ]
-        filtered_violations = self._find_violations(meaningful_calls, summary.get("api_threshold_ms", 500))
+        filtered_violations = self._find_violations(meaningful_calls, summary.get("api_threshold_ms") or 500)
         action_errors = action_stats.get("count", 0) - action_stats.get("success_count", 0)
         # Note: SLA (api_threshold_ms) violations and action duration are informational only
         # (see Performance rating) and do not fail the overall report. The report fails only
@@ -197,9 +206,10 @@ class HtmlReport:
         </div>
     </div>
 
-    {self._render_actions_section(actions, summary.get('api_threshold_ms', 500))}
+    {self._render_network_errors_section(filtered_errors)}
+    {self._render_actions_section(actions, summary.get('api_threshold_ms') or 500)}
     {self._render_waterfall_timeline(actions, meaningful_calls)}
-    {self._render_violations_section(violations, summary.get('api_threshold_ms', 500))}
+    {self._render_violations_section(violations, summary.get('api_threshold_ms') or 500)}
         </div>
     </div>
 
@@ -300,6 +310,47 @@ class HtmlReport:
     </table>
         """
     
+    def _render_network_errors_section(self, errors: List[Dict[str, Any]]) -> str:
+        """Surface the exact failing requests behind the "N errors" summary count, so a
+        dev can immediately see which endpoint(s) failed, with what status/error, and how
+        often - instead of having to dig through the raw api_calls.csv."""
+        if not errors:
+            return ""
+
+        grouped: Dict[tuple, Dict[str, Any]] = {}
+        for e in errors:
+            url = e.get("url", "")
+            display_url = url.split("?")[0].replace("https://", "").replace("http://", "")
+            message = (e.get("api_error") or e.get("error") or "").splitlines()[0] if (e.get("api_error") or e.get("error")) else ""
+            key = (e.get("method"), display_url, e.get("status"), message)
+            entry = grouped.setdefault(key, {"count": 0, "durations": []})
+            entry["count"] += 1
+            if isinstance(e.get("duration_ms"), (int, float)):
+                entry["durations"].append(e["duration_ms"])
+
+        rows = []
+        for (method, display_url, status, message), info in sorted(grouped.items(), key=lambda kv: -kv[1]["count"]):
+            avg_ms = statistics.mean(info["durations"]) if info["durations"] else 0
+            rows.append(
+                f"<tr><td>{method or '-'}</td><td>{display_url}</td>"
+                f"<td class='metric-bad'>{status if status else 'No response'}</td>"
+                f"<td>{message or '-'}</td>"
+                f"<td>{info['count']}</td>"
+                f"<td>{avg_ms:.0f}</td></tr>"
+            )
+
+        return f"""
+    <h2>🚨 Network Errors ({len(errors)})</h2>
+    <div class="section-note" style="border-left-color: #dc3545; background: #fff5f5;">
+        <strong>These are the failing requests behind the error count above.</strong> Each row is grouped by
+        endpoint/status/message, with how many times it occurred and its average duration.
+    </div>
+    <table>
+        <tr><th>Method</th><th>Endpoint</th><th>Status</th><th>Error</th><th>Count</th><th>Avg Duration (ms)</th></tr>
+        {''.join(rows)}
+    </table>
+        """
+
     def _render_grouped_endpoint_rows(self, groups: List[Dict[str, Any]], threshold: float) -> str:
         rows = []
         for g in groups:
@@ -445,9 +496,11 @@ class HtmlReport:
             error = a.get("error") or ""
             details = a.get("details", {})
             details_text = "<br>".join(f"{k}: {v}" for k, v in details.items())
+            endpoints_text = "<br>".join(a.get("api_calls", []) or []) or "-"
 
             rows.append(
                 f"<tr><td>{a.get('name', '')}</td><td>{action_type}</td>"
+                f"<td>{endpoints_text}</td>"
                 f"<td class='{api_class}'>{api_text}</td>"
                 f"<td class='{ui_class}'>{ui_text}</td>"
                 f"<td class='{perf_class}'>{total_text}</td>"
@@ -460,10 +513,10 @@ class HtmlReport:
         return f"""
     <h2>Actions ({passed_count}/{len(actions)} successful)</h2>
     <div class="section-note">
-        <strong>Action-level metrics:</strong> API time is the request/response duration. UI reflection time is how long it took for the backend state (polled via API) to show the change. Status reflects real API errors only. Performance rates total duration against action-type-aware response-time tiers (hardware actions like camera zoom/preset recall get more lenient tiers than pure software actions).
+        <strong>Action-level metrics:</strong> API time is the request/response duration. UI reflection time is how long it took for the backend state (polled via API) to show the change. Status reflects real API errors only. Performance rates total duration against action-type-aware response-time tiers (hardware actions like camera zoom/preset recall get more lenient tiers than pure software actions). Endpoint(s) shows the exact API call(s) this action made, to speed up root-causing failures.
     </div>
     <table>
-        <tr><th>Action</th><th>Type</th><th>API (ms)</th><th>UI Reflection (ms)</th><th>Total (ms)</th><th>Performance</th><th>Status</th><th>Details</th><th>Error</th></tr>
+        <tr><th>Action</th><th>Type</th><th>Endpoint(s)</th><th>API (ms)</th><th>UI Reflection (ms)</th><th>Total (ms)</th><th>Performance</th><th>Status</th><th>Details</th><th>Error</th></tr>
         {''.join(rows)}
     </table>
         """

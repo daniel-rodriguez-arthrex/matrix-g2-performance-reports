@@ -21,6 +21,62 @@ def _get_display_layout(displays: List[Dict[str, Any]], display_id: str) -> str:
     return ""
 
 
+def _get_display_settings_obj(settings: Dict[str, Any], display_id: str) -> Dict[str, Any]:
+    for d in settings.get("displays", []) or []:
+        if d.get("id") == display_id:
+            return dict(d)
+    return {"id": display_id}
+
+
+async def _ensure_layout_capability(page, client: MatrixClient, display_id: str) -> Dict[str, bool]:
+    """Ensure this display's pip_pap/quad/wall settings flags are enabled (as far as its
+    hardware supports) so its supportedLayouts reflects the full set of layouts this
+    workflow can test, regardless of whatever state a previous run/session left the room
+    in. Returns the flags as they were found, so the caller can restore them afterward.
+
+    Dependency (see docs/quadsupport_investigation.md): quad/wall each require pip_pap to
+    be enabled first, and quad/wall can only ever appear if the display's hardware supports
+    them (read-only quadSupport/wallSupport flags).
+    """
+    display_settings = _get_display_settings_obj(client.get_room_settings(), display_id)
+    original_flags = {f: bool(display_settings.get(f, False)) for f in ("pip_pap", "quad", "wall")}
+    target_flags = dict(original_flags)
+    target_flags["pip_pap"] = True
+    if display_settings.get("quadSupport"):
+        target_flags["quad"] = True
+    if display_settings.get("wallSupport"):
+        target_flags["wall"] = True
+
+    if target_flags == original_flags:
+        return original_flags
+
+    try:
+        payload_obj = dict(display_settings)
+        payload_obj.update(target_flags)
+        client.update_room_settings({"displays": [payload_obj]})
+        for _ in range(30):
+            current = _get_display_settings_obj(client.get_room_settings(), display_id)
+            if all(bool(current.get(f, False)) == v for f, v in target_flags.items()):
+                break
+            await page.wait_for_timeout(100)
+    except Exception as exc:
+        print(f"[layouts] Failed to prep layout capability for display {display_id}: {exc}")
+
+    return original_flags
+
+
+async def _restore_layout_capability(client: MatrixClient, display_id: str, original_flags: Dict[str, bool]) -> None:
+    try:
+        display_settings = _get_display_settings_obj(client.get_room_settings(), display_id)
+        if {f: bool(display_settings.get(f, False)) for f in original_flags} == original_flags:
+            return
+        restore_obj = dict(display_settings)
+        restore_obj.update(original_flags)
+        client.update_room_settings({"displays": [restore_obj]})
+    except Exception as exc:
+        print(f"[layouts] Failed to restore original layout flags for display {display_id}: {exc}")
+
+
 async def _navigate_to_app(page, room) -> None:
     """Navigate to the app and complete room selection/passcode flow."""
     await page.goto(
@@ -104,7 +160,17 @@ async def run(session, interceptor, ui_monitor=None, **kwargs: Any) -> Dict[str,
     for display in displays:
         display_id = display.get("id")
         display_label = label(display.get("attributes", {}).get("name", ""), display_id)
+
+        # Don't trust whatever supportedLayouts happens to be right now - a prior run/session
+        # may have left pip_pap/quad/wall disabled on the device. Enable everything this
+        # display's hardware supports first so the workflow is always ready to run, then
+        # restore the original flags once this display's layouts have been tested.
+        original_flags = await _ensure_layout_capability(page, client, display_id)
         supported_layouts = display.get("attributes", {}).get("supportedLayouts", LAYOUTS)
+        for refreshed in client.get_displays():
+            if refreshed.get("id") == display_id:
+                supported_layouts = refreshed.get("attributes", {}).get("supportedLayouts", LAYOUTS)
+                break
         layouts_to_test = [layout for layout in LAYOUTS if layout in supported_layouts]
 
         for layout in layouts_to_test:
@@ -148,6 +214,8 @@ async def run(session, interceptor, ui_monitor=None, **kwargs: Any) -> Dict[str,
                     api_duration_ms=(api_end - api_start) * 1000,
                 )
             actions.append(action.to_dict())
+
+        await _restore_layout_capability(client, display_id, original_flags)
 
     client.close()
 

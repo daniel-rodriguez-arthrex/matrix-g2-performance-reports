@@ -101,6 +101,28 @@ WORKFLOWS: Dict[str, WorkflowConfig] = {
         sla=WorkflowSLA(api_ms=500, ui_ms=2000, total_ms=2500),
         selectors=["#settings-icon"],
     ),
+    "sharing": WorkflowConfig(
+        name="sharing",
+        description="Grant then revoke sharing of a local video source with another room",
+        expected_endpoints=[
+            "/api/room",
+            "/api/room/list",
+            "/api/devices/videoSources",
+            "/api/room/share",
+        ],
+        sla=WorkflowSLA(api_ms=500, ui_ms=2000, total_ms=2500),
+        selectors=["#control-tab", "#control-webview-container"],
+    ),
+    "room_camera": WorkflowConfig(
+        name="room_camera",
+        description="Test the room camera's connection and round-trip its settings save",
+        expected_endpoints=[
+            "/api/room/settings",
+            "/api/cameras/{id}/testConnection",
+        ],
+        sla=WorkflowSLA(api_ms=500, ui_ms=2000, total_ms=2500),
+        selectors=["#settings-icon"],
+    ),
 }
 
 

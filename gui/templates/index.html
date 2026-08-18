@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix G2 Performance Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <h1>Matrix G2 Performance</h1>
+            <nav class="tabs">
+                <button class="tab active" data-tab="run">Run Test</button>
+                <button class="tab" data-tab="results">Results</button>
+                <button class="tab" data-tab="publish">Publish</button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- RUN TEST -->
+        <section id="tab-run" class="panel active">
+            <div class="grid-2">
+                <form id="run-form" class="card form-card">
+                    <h2>Launch a test run</h2>
+
+                    <label>Mode
+                        <select name="mode" id="mode">
+                            <option value="scenario">Scenario (automated)</option>
+                            <option value="passive">Passive (manual navigation)</option>
+                        </select>
+                    </label>
+
+                    <label>Room
+                        <select name="room" id="room"></select>
+                    </label>
+
+                    <div class="mode-scenario">
+                        <label>Scenario
+                            <select name="scenario" id="scenario"></select>
+                        </label>
+                        <p class="hint" id="scenario-hint"></p>
+
+                        <div class="row">
+                            <label>Iterations
+                                <input type="number" name="iterations" id="iterations" min="1" value="1">
+                            </label>
+                            <label class="check">
+                                <input type="checkbox" name="headless" id="headless" checked>
+                                Headless
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="mode-passive" hidden>
+                        <label class="check">
+                            <input type="checkbox" name="skip_login" id="skip_login">
+                            Auto-login (skip manual passcode)
+                        </label>
+                        <label>Auto-stop after (seconds)
+                            <input type="number" name="duration" id="duration" min="0" placeholder="run until stopped">
+                        </label>
+                    </div>
+
+                    <label>API threshold (ms)
+                        <input type="number" name="api_threshold" id="api_threshold" min="0" value="500">
+                    </label>
+                    <label>Output dir (optional)
+                        <input type="text" name="output_dir" id="output_dir" placeholder="results">
+                    </label>
+
+                    <div class="actions">
+                        <button type="submit" class="btn btn-primary" id="run-btn">Start Run</button>
+                        <button type="button" class="btn btn-danger" id="stop-btn" disabled>Stop</button>
+                    </div>
+                    <p class="run-error" id="run-error"></p>
+                </form>
+
+                <div class="card log-card">
+                    <div class="log-header">
+                        <h2>Live log</h2>
+                        <span class="status-pill" id="run-status">idle</span>
+                    </div>
+                    <pre class="log" id="log"></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- RESULTS -->
+        <section id="tab-results" class="panel">
+            <div class="section-head">
+                <h2>Past runs</h2>
+                <button class="btn" id="refresh-results">Refresh</button>
+            </div>
+            <div class="cards" id="results-cards"></div>
+        </section>
+
+        <!-- PUBLISH -->
+        <section id="tab-publish" class="panel">
+            <h2>Publish a report</h2>
+            <p class="hint">Sanitizes the selected report, stages it into <code>site/</code>, then
+                lets you review and push to the public <code>gh-pages</code> site.</p>
+            <div class="card">
+                <label>Report
+                    <select id="publish-select"></select>
+                </label>
+                <label>Hub title (optional)
+                    <input type="text" id="publish-title" placeholder="e.g. Full Suite - OR1">
+                </label>
+                <div class="actions">
+                    <button class="btn btn-primary" id="stage-btn">Sanitize &amp; Stage</button>
+                </div>
+                <div id="stage-output" class="stage-output" hidden>
+                    <div class="stage-summary" id="stage-summary"></div>
+                    <label>Commit message
+                        <input type="text" id="commit-message" placeholder="Add <report> to hub">
+                    </label>
+                    <label class="check" id="override-wrap" hidden>
+                        <input type="checkbox" id="allow-override">
+                        I reviewed the flagged IPs and want to push anyway
+                    </label>
+                    <div class="actions">
+                        <button class="btn btn-danger" id="push-btn" disabled>Confirm &amp; Push</button>
+                    </div>
+                    <pre class="log" id="push-output"></pre>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

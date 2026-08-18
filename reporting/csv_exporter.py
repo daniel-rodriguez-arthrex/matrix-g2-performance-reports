@@ -112,6 +112,68 @@ class CsvExporter:
             })
         return self._write_csv("websocket_frames.csv", rows, fieldnames)
 
+    def export_actions(
+        self,
+        actions: List[Dict[str, Any]],
+        timestamp: str,
+        room: str,
+        workflow: str,
+    ) -> Path:
+        """Export per-action metrics (one row per action).
+
+        These are the action-level metrics collected by ActionCollector - the real
+        workflow operations (route, change layout, camera move, etc.), including which
+        API endpoint(s) each action called and its API/UI/total timings. This data was
+        previously only visible in report.html; this makes it available as a
+        machine-readable file for analysis and regression diffing.
+        """
+        fieldnames = [
+            "Timestamp", "Room", "Workflow", "Index", "Name", "ActionType",
+            "Endpoints", "ApiDurationMs", "UiDurationMs", "TotalDurationMs",
+            "Success", "Error", "Details", "BeforeState", "AfterState",
+        ]
+        rows = []
+        for i, action in enumerate(actions):
+            rows.append({
+                "Timestamp": timestamp,
+                "Room": room,
+                "Workflow": workflow,
+                "Index": i,
+                "Name": action.get("name"),
+                "ActionType": action.get("action_type"),
+                "Endpoints": "; ".join(action.get("api_calls", []) or []),
+                "ApiDurationMs": action.get("api_duration_ms"),
+                "UiDurationMs": action.get("ui_duration_ms"),
+                "TotalDurationMs": action.get("total_duration_ms"),
+                "Success": action.get("success"),
+                "Error": action.get("error"),
+                "Details": _safe_json(action.get("details")),
+                "BeforeState": _safe_json(action.get("before_state")),
+                "AfterState": _safe_json(action.get("after_state")),
+            })
+        return self._write_csv("actions.csv", rows, fieldnames)
+
+    def export_actions_json(
+        self,
+        actions: List[Dict[str, Any]],
+        timestamp: str,
+        room: str,
+        workflow: str,
+    ) -> Path:
+        """Export per-action metrics as JSON, preserving full nested before/after state
+        and details that don't flatten cleanly into CSV columns."""
+        path = self.output_dir / "actions.json"
+        payload = {
+            "timestamp": timestamp,
+            "room": room,
+            "workflow": workflow,
+            "action_count": len(actions),
+            "actions": actions,
+        }
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2, default=str)
+        return path
+
     def export_summary(
         self,
         summary: Dict[str, Any],

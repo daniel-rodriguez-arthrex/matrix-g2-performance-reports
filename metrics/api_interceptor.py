@@ -2,6 +2,7 @@ import json
 import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Dict, List, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 from playwright.async_api import Page, Route
 
@@ -48,13 +49,45 @@ class ApiInterceptor:
         self.calls: List[ApiCall] = []
         self._handler: Optional[Callable] = None
 
+        parsed_base = urlsplit(self.base_url)
+        self._base_host = parsed_base.hostname
+        self._base_port = parsed_base.port
+        self.dropped_port_fixes = 0
+
+    def _fix_dropped_port(self, url: str) -> str:
+        """Work around a Matrix G2 app bug where some reconnect/status-polling calls
+        rebuild the request URL without the room's real host and/or custom port,
+        causing them to hit the default scheme port (e.g. 443) or localhost (e.g.
+        ECONNREFUSED ::1) and fail forever - which leaves the app stuck on its loading
+        splash. Two cases are rewritten back to the room's real host:port:
+          1. Host matches the room but the port was dropped/defaulted.
+          2. Host was rebuilt as localhost/127.0.0.1/[::1] instead of the room's host
+             (seen when the app's reconnect logic falls back to a hardcoded default).
+        """
+        if not self._base_port or not self._base_host:
+            return url
+        parsed = urlsplit(url)
+        same_host_wrong_port = parsed.hostname == self._base_host and parsed.port != self._base_port
+        dropped_to_localhost = parsed.hostname in ("localhost", "127.0.0.1", "::1")
+        if not (same_host_wrong_port or dropped_to_localhost):
+            return url
+        netloc = f"{self._base_host}:{self._base_port}"
+        self.dropped_port_fixes += 1
+        return urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
+
     async def start(self) -> None:
         self._handler = lambda route: self._on_route(route)
         await self.page.route("**/*", self._handler)
 
     async def stop(self) -> None:
         if self._handler:
-            await self.page.unroute("**/*", self._handler)
+            try:
+                await self.page.unroute("**/*", self._handler)
+            except Exception:
+                # Page/context/browser may already be closed (e.g. user closed the
+                # window before Ctrl+C) - nothing to unroute at that point, and we
+                # still want report generation below to proceed with what we captured.
+                pass
             self._handler = None
 
     def reset(self) -> None:
@@ -85,8 +118,9 @@ class ApiInterceptor:
             start_time=start,
         )
 
+        fixed_url = self._fix_dropped_port(url)
         try:
-            response = await route.fetch()
+            response = await route.fetch(url=fixed_url) if fixed_url != url else await route.fetch()
             end = time.perf_counter()
             call.end_time = end
             call.status = response.status
@@ -132,7 +166,7 @@ class ApiInterceptor:
             call.is_valid = False
             call.api_error = str(exc)
             try:
-                await route.continue_()
+                await (route.continue_(url=fixed_url) if fixed_url != url else route.continue_())
             except Exception:
                 pass  # Route may already be handled if page closed
 

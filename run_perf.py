@@ -11,6 +11,7 @@ import signal
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -32,8 +33,65 @@ def _session_dir(output_dir: Path, room: str, mode: str, timestamp: str) -> Path
     return output_dir / f"{mode}_{room}_{timestamp}"
 
 
-async def _wait_for_stop() -> None:
-    """Block until the user interrupts with Ctrl+C."""
+async def _auto_login(page, room) -> None:
+    """Navigate to the app and complete room selection/passcode entry via the real UI.
+
+    Mirrors the proven flow used by automated workflows (e.g. workflows/routing.py's
+    _navigate_to_app). The app's own init handshake (getAccessToken/pair) does not
+    accept a pre-seeded localStorage token, so this drives the actual passcode keyboard
+    instead of trying to short-circuit it.
+    """
+    await page.goto(f"{room.base_url}/app", wait_until="domcontentloaded", timeout=30000)
+    await page.wait_for_timeout(1500)
+
+    room_list = page.locator("#room-selection-rooms li")
+    if await room_list.count() > 0:
+        for i in range(await room_list.count()):
+            item = room_list.nth(i)
+            text = await item.text_content()
+            if text and text.strip() == room.id:
+                try:
+                    await item.locator("span").first.click()
+                except Exception:
+                    await item.click()
+                break
+        await page.wait_for_timeout(1000)
+
+        if room.passcode:
+            for digit in room.passcode:
+                for key in await page.locator(".keyboard li button").all():
+                    key_text = await key.text_content()
+                    if key_text and key_text.strip() == digit:
+                        await key.dispatch_event("click")
+                        await page.wait_for_timeout(100)
+                        break
+            await page.wait_for_timeout(500)
+            done_button = page.locator("#room-selection-done-button button")
+            try:
+                for _ in range(20):
+                    if await done_button.count() > 0 and await done_button.is_enabled():
+                        break
+                    await page.wait_for_timeout(250)
+                if await done_button.count() > 0 and await done_button.is_enabled():
+                    await done_button.dispatch_event("click")
+                    await page.wait_for_timeout(1500)
+            except Exception:
+                pass
+
+    control_tab = page.locator("#control-tab")
+    if await control_tab.count() > 0:
+        try:
+            await control_tab.click()
+            await page.wait_for_timeout(1000)
+        except Exception:
+            pass
+
+
+async def _wait_for_stop(duration: Optional[float] = None) -> None:
+    """Block until the user interrupts with Ctrl+C, or until `duration` seconds have
+    elapsed (whichever comes first). A duration allows the session to auto-stop and
+    export cleanly when run in contexts where a real Ctrl+C/SIGINT can't be delivered
+    (e.g. a background/non-interactive process)."""
     stop_event = asyncio.Event()
     loop = asyncio.get_running_loop()
     handler = lambda: stop_event.set()  # noqa: E731
@@ -48,7 +106,13 @@ async def _wait_for_stop() -> None:
         signal.signal(signal.SIGINT, fallback_handler)
 
     try:
-        await stop_event.wait()
+        if duration is not None:
+            try:
+                await asyncio.wait_for(stop_event.wait(), timeout=duration)
+            except asyncio.TimeoutError:
+                pass
+        else:
+            await stop_event.wait()
     finally:
         try:
             loop.remove_signal_handler(signal.SIGINT)
@@ -70,7 +134,6 @@ async def passive_mode(args: argparse.Namespace) -> None:
         room_id=room_id,
         headless=False,
         output_dir=session_dir,
-        channel="chrome",
         skip_auth_injection=True,
     ) as session:
         page = session.page
@@ -79,12 +142,21 @@ async def passive_mode(args: argparse.Namespace) -> None:
         ws_monitor = WebSocketMonitor(page)
         ws_monitor.start()
 
-        print(f"Passive monitoring started: {room.login_url()}")
-        print("Log in manually and navigate Matrix G2.")
-        print("Press Ctrl+C to stop and generate reports.")
+        if args.skip_login:
+            print(f"Passive monitoring started: {room.login_url()}")
+            print("Auto-completing room selection/passcode via the UI...")
+            await _auto_login(page, room)
+            print("Logged in - continue navigating manually.")
+        else:
+            print(f"Passive monitoring started: {room.login_url()}")
+            print("Log in manually and navigate Matrix G2.")
+        if args.duration:
+            print(f"Will auto-stop and generate reports after {args.duration}s (or Ctrl+C sooner).")
+        else:
+            print("Press Ctrl+C to stop and generate reports.")
 
         try:
-            await _wait_for_stop()
+            await _wait_for_stop(args.duration)
         except asyncio.CancelledError:
             pass
 
@@ -152,7 +224,6 @@ async def scenario_mode(args: argparse.Namespace) -> None:
             args.scenario,
             iterations=args.iterations,
             api_threshold=args.api_threshold,
-            ui_threshold=args.ui_threshold,
         )
 
         aggregator = Aggregator()
@@ -160,6 +231,9 @@ async def scenario_mode(args: argparse.Namespace) -> None:
 
         # Collect API calls across all iterations from the runner summaries
         all_calls = [c for r in results for c in r.get("calls", [])]
+        # Collect action-level metrics (the real workflow operations, with the API
+        # endpoint(s) each one called) across all iterations.
+        all_actions = [a for r in results for a in r.get("actions", [])]
         endpoints = interceptor.get_unique_endpoints()
         ws_frames = ws_monitor.get_frames()
 
@@ -184,6 +258,8 @@ async def scenario_mode(args: argparse.Namespace) -> None:
         exporter.export_endpoints(endpoints)
         exporter.export_selectors(selector_results)
         exporter.export_ui_timings(ui_monitor.get_summary(), timestamp_str, room_id, args.scenario)
+        exporter.export_actions(all_actions, timestamp_str, room_id, args.scenario)
+        exporter.export_actions_json(all_actions, timestamp_str, room_id, args.scenario)
         exporter.export_summary(summary, timestamp_str, room_id, args.scenario)
         if ws_frames:
             exporter.export_websocket_frames(ws_frames, timestamp_str, room_id, args.scenario)
@@ -224,6 +300,20 @@ def main() -> None:
         help="Run browser in headless mode (only for scenario mode)",
     )
     parser.add_argument(
+        "--skip-login",
+        action="store_true",
+        help="Passive mode only: pre-authenticate via the API and inject the token, "
+        "landing directly on the app instead of the manual room-selection/passcode flow.",
+    )
+    parser.add_argument(
+        "--duration",
+        type=float,
+        default=None,
+        help="Passive mode only: auto-stop and generate reports after this many seconds "
+        "instead of waiting for Ctrl+C. Useful when running as a background process where "
+        "a real Ctrl+C/SIGINT can't be delivered.",
+    )
+    parser.add_argument(
         "--iterations",
         type=int,
         default=1,
@@ -239,12 +329,6 @@ def main() -> None:
         type=int,
         default=None,
         help="API SLA threshold in milliseconds",
-    )
-    parser.add_argument(
-        "--ui-threshold",
-        type=int,
-        default=None,
-        help="UI SLA threshold in milliseconds",
     )
     args = parser.parse_args()
 

@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List
 
-from . import audio_routing, camera, layouts, presets, routing, settings, speakers
+from . import audio_routing, camera, layouts, presets, room_camera, routing, settings, sharing, speakers
 
 WORKFLOW_FUNCTIONS = {
     "routing": routing.run,
@@ -12,6 +12,8 @@ WORKFLOW_FUNCTIONS = {
     "layouts": layouts.run,
     "speakers": speakers.run,
     "settings": settings.run,
+    "sharing": sharing.run,
+    "room_camera": room_camera.run,
 }
 
 
