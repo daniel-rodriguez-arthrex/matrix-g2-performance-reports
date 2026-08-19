@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix G2 Performance Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 2rem 1rem; }
+        .container { max-width: 1400px; margin: 0 auto; background: #ffffff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 2.5rem 2rem; }
+        .header h1 { font-size: 2.5rem; font-weight: 700; margin-bottom: 0.5rem; letter-spacing: -0.5px; }
+        .header .meta { font-size: 1rem; opacity: 0.9; font-weight: 500; }
+        .content { padding: 2rem; }
+        h2 { color: #2d3748; font-size: 1.5rem; font-weight: 700; margin: 2.5rem 0 1.5rem 0; padding-bottom: 0.75rem; border-bottom: 3px solid #e2e8f0; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; margin-bottom: 2.5rem; }
+        .summary-card { background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; transition: transform 0.2s, box-shadow 0.2s; }
+        .summary-card:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+        .summary-card h3 { font-size: 0.75rem; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 0.75rem; }
+        .summary-card .value { font-size: 2.25rem; font-weight: 800; line-height: 1; margin-bottom: 0.5rem; }
+        .summary-card .subtext { font-size: 0.875rem; color: #718096; }
+        .status-pass { color: #38a169; }
+        .status-fail { color: #e53e3e; }
+        .status-warn { color: #d69e2e; }
+        table { width: 100%; border-collapse: separate; border-spacing: 0; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 2rem; }
+        th { background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%); color: #fff; padding: 1rem; text-align: left; font-size: 0.875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        td { padding: 1rem; font-size: 0.875rem; border-bottom: 1px solid #e2e8f0; word-wrap: break-word; overflow-wrap: break-word; max-width: 320px; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: #f7fafc; }
+        .metric-good { color: #38a169; font-weight: 700; }
+        .metric-warn { color: #d69e2e; font-weight: 700; }
+        .metric-bad { color: #e53e3e; font-weight: 700; }
+        .badge { display: inline-block; padding: 0.375rem 0.75rem; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .badge-success { background: #c6f6d5; color: #22543d; }
+        .badge-danger { background: #fed7d7; color: #742a2a; }
+        .section-note { background: linear-gradient(135deg, #ebf8ff 0%, #e6fffa 100%); padding: 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; border-left: 4px solid #4299e1; font-size: 0.875rem; line-height: 1.6; }
+        .timeline { margin: 1.5rem 0; background: #fff; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .timeline-header { display: flex; align-items: center; margin-bottom: 1.5rem; padding-bottom: 1rem; border-bottom: 2px solid #e2e8f0; }
+        .timeline-header-label { width: 320px; font-size: 0.75rem; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; }
+        .timeline-header-scale { flex: 1; display: flex; font-size: 0.75rem; color: #a0aec0; font-weight: 600; padding: 0 1rem; position: relative; }
+        .timeline-header-scale span { position: absolute; transform: translateX(-50%); }
+        .timeline-header-scale span:nth-child(1) { left: 1rem; transform: translateX(0); }
+        .timeline-header-scale span:nth-child(2) { left: calc(1rem + 25%); }
+        .timeline-header-scale span:nth-child(3) { left: calc(1rem + 50%); }
+        .timeline-header-scale span:nth-child(4) { left: calc(1rem + 75%); }
+        .timeline-header-scale span:nth-child(5) { left: calc(1rem + 100%); transform: translateX(-100%); }
+        .timeline-row { display: flex; align-items: center; margin-bottom: 1rem; padding: 0.5rem 0; border-bottom: 1px solid #f7fafc; }
+        .timeline-row:last-child { border-bottom: none; }
+        .timeline-row:hover { background: #f7fafc; margin: 0 -1rem 1rem -1rem; padding: 0.5rem 1rem; border-radius: 6px; }
+        .timeline-label { width: 320px; font-size: 0.875rem; font-weight: 600; color: #2d3748; padding-right: 1.5rem; line-height: 1.4; }
+        .timeline-track { flex: 1; position: relative; height: 40px; display: flex; align-items: center; padding: 0 1rem; }
+        .timeline-bars { position: relative; width: 100%; height: 28px; display: flex; }
+        .timeline-bar { height: 28px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; color: #fff; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: transform 0.2s, box-shadow 0.2s; }
+        .timeline-bar:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+        .timeline-bar-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 6px; }
+        .timeline-times { min-width: 200px; font-size: 0.75rem; color: #718096; padding-left: 1.5rem; font-weight: 600; text-align: right; }
+        .bar-api { background: linear-gradient(135deg, #4299e1 0%, #2b6cb0 100%); }
+        .bar-ui { background: linear-gradient(135deg, #48bb78 0%, #2f855a 100%); }
+        .bar-api-violation { background: linear-gradient(135deg, #fc8181 0%, #c53030 100%); }
+        .timeline-legend { display: flex; gap: 1.5rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e2e8f0; font-size: 0.75rem; }
+        .timeline-legend-item { display: flex; align-items: center; gap: 0.5rem; }
+        .timeline-legend-box { width: 16px; height: 16px; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Matrix G2 Performance Report</h1>
+            <div class="meta">ALL • Room OR1 • 2026-08-18T09:02:46</div>
+        </div>
+        <div class="content">
+    
+    <div class="summary-grid">
+        <div class="summary-card">
+            <h3>Status</h3>
+            <div class="value status-fail">
+                ✗ FAIL
+            </div>
+            <div class="subtext">3 validation failures, 3 errors, 0 SLA violations</div>
+        </div>
+        
+        <div class="summary-card">
+            <h3>Workflow API Calls</h3>
+            <div class="value">67</div>
+            <div class="subtext">Across 53 actions</div>
+        </div>
+        
+        <div class="summary-card">
+            <h3>Avg API Time</h3>
+            <div class="value metric-warn">
+                120ms
+            </div>
+            <div class="subtext">P50 (median) action API time</div>
+        </div>
+        
+        <div class="summary-card">
+            <h3>P95 API Time</h3>
+            <div class="value metric-bad">
+                2018ms
+            </div>
+            <div class="subtext">Threshold: 600ms</div>
+        </div>
+        
+        <div class="summary-card">
+            <h3>Slowest Action</h3>
+            <div class="value metric-bad">
+                3964ms
+            </div>
+            <div class="subtext">Uncheck Wall for display display1 (mna-240-9730064510_dpOut0)</div>
+        </div>
+        
+        <div class="summary-card">
+            <h3>Errors</h3>
+            <div class="value status-fail">
+                3
+            </div>
+            <div class="subtext">0 action failures, 3 network HTTP errors</div>
+        </div>
+        
+        <div class="summary-card">
+            <h3>Actions</h3>
+            <div class="value status-pass">
+                53/53
+            </div>
+            <div class="subtext">Actions completed successfully</div>
+        </div>
+        
+        <div class="summary-card">
+            <h3>Avg UI Reflection</h3>
+            <div class="value metric-good">
+                310ms
+            </div>
+            <div class="subtext">Time for state to reflect after API call</div>
+        </div>
+    </div>
+
+    
+    <h2>🚨 Network Errors (3)</h2>
+    <div class="section-note" style="border-left-color: #dc3545; background: #fff5f5;">
+        <strong>These are the failing requests behind the error count above.</strong> Each row is grouped by
+        endpoint/status/message, with how many times it occurred and its average duration.
+    </div>
+    <table>
+        <tr><th>Method</th><th>Endpoint</th><th>Status</th><th>Error</th><th>Count</th><th>Avg Duration (ms)</th></tr>
+        <tr><td>GET</td><td>localhost:10001/api/room/settings</td><td class='metric-bad'>401</td><td>HTTP error 401</td><td>3</td><td>44</td></tr>
+    </table>
+        
+    
+    <h2>Actions (53/53 successful)</h2>
+    <div class="section-note">
+        <strong>Action-level metrics:</strong> API time is the request/response duration. UI reflection time is how long it took for the backend state (polled via API) to show the change. Status reflects real API errors only. Performance rates total duration against action-type-aware response-time tiers (hardware actions like camera zoom/preset recall get more lenient tiers than pure software actions). Endpoint(s) shows the exact API call(s) this action made, to speed up root-causing failures.
+    </div>
+    <table>
+        <tr><th>Action</th><th>Type</th><th>Endpoint(s)</th><th>API (ms)</th><th>UI Reflection (ms)</th><th>Total (ms)</th><th>Performance</th><th>Status</th><th>Details</th><th>Error</th></tr>
+        <tr><td>Route OR04 S4 (mna-440-2530831456_hdmiIn1) to display1 (mna-240-9730064510_dpOut0)</td><td>route</td><td>POST /api/room/route</td><td class='metric-good'>50</td><td class='metric-good'>31</td><td class='metric-good'>81</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>source_id: mna-440-2530831456_hdmiIn1<br>display_id: mna-240-9730064510_dpOut0<br>slot: 1</td><td></td></tr><tr><td>Unroute from display1 (mna-240-9730064510_dpOut0)</td><td>unroute</td><td>POST /api/room/unroute</td><td class='metric-good'>30</td><td class='metric-good'>25</td><td class='metric-good'>55</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>slot: 1</td><td></td></tr><tr><td>Route OR04 S4 (mna-440-2530831456_hdmiIn1) to display2 (mna-240-9730407262_dpOut0)</td><td>route</td><td>POST /api/room/route</td><td class='metric-good'>44</td><td class='metric-good'>58</td><td class='metric-good'>102</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>source_id: mna-440-2530831456_hdmiIn1<br>display_id: mna-240-9730407262_dpOut0<br>slot: 1</td><td></td></tr><tr><td>Unroute from display2 (mna-240-9730407262_dpOut0)</td><td>unroute</td><td>POST /api/room/unroute</td><td class='metric-good'>46</td><td class='metric-good'>35</td><td class='metric-good'>81</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730407262_dpOut0<br>slot: 1</td><td></td></tr><tr><td>Route OR04 S4 (mna-440-2530831456_hdmiIn1) to display3 (mna-420-2530840919_hdmiOut1)</td><td>route</td><td>POST /api/room/route</td><td class='metric-good'>64</td><td class='metric-good'>30</td><td class='metric-good'>94</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>source_id: mna-440-2530831456_hdmiIn1<br>display_id: mna-420-2530840919_hdmiOut1<br>slot: 1</td><td></td></tr><tr><td>Unroute from display3 (mna-420-2530840919_hdmiOut1)</td><td>unroute</td><td>POST /api/room/unroute</td><td class='metric-good'>34</td><td class='metric-good'>30</td><td class='metric-good'>64</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-420-2530840919_hdmiOut1<br>slot: 1</td><td></td></tr><tr><td>Route audio audio1 (mna-440-2530831429_audioIn) to speaker1 (mna-440-2530831429_audioOut)</td><td>audio_route</td><td>POST /api/room/route</td><td class='metric-good'>70</td><td class='metric-good'>68</td><td class='metric-good'>138</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>source_id: mna-440-2530831429_audioIn<br>speaker_id: mna-440-2530831429_audioOut<br>slot: 1</td><td></td></tr><tr><td>Unroute audio from speaker1 (mna-440-2530831429_audioOut)</td><td>audio_unroute</td><td>POST /api/room/unroute</td><td class='metric-good'>25</td><td class='metric-good'>52</td><td class='metric-good'>77</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>speaker_id: mna-440-2530831429_audioOut<br>slot: 1</td><td></td></tr><tr><td>Call room preset 1</td><td>room_preset_call</td><td>POST /api/room/presets/call</td><td class='metric-bad'>1111</td><td class='metric-good'>46</td><td class='metric-warn'>1157</td><td class='metric-warn'>Borderline</td><td><span class='badge badge-success'>OK</span></td><td>preset_index: 1</td><td></td></tr><tr><td>Rename preset 1 to 'Picture-in-Picture Layout (test)'</td><td>room_preset_rename</td><td>PUT /api/room/presets<br>GET /api/room/presets</td><td class='metric-good'>12</td><td class='metric-good'>6</td><td class='metric-good'>18</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>preset_index: 1<br>target_name: Picture-in-Picture Layout (test)</td><td></td></tr><tr><td>Restore name for preset 1 to 'Picture-in-Picture Layout'</td><td>room_preset_rename</td><td>PUT /api/room/presets<br>GET /api/room/presets</td><td class='metric-good'>5</td><td class='metric-good'>5</td><td class='metric-good'>10</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>preset_index: 1<br>target_name: Picture-in-Picture Layout</td><td></td></tr><tr><td>Move camera 1 up</td><td>camera_move</td><td>POST /api/cameras/1/move</td><td class='metric-warn'>495</td><td class='metric-good'>78</td><td class='metric-good'>573</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>camera_id: 1<br>direction: up</td><td></td></tr><tr><td>Move camera 1 down</td><td>camera_move</td><td>POST /api/cameras/1/move</td><td class='metric-warn'>486</td><td class='metric-good'>87</td><td class='metric-good'>573</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>camera_id: 1<br>direction: down</td><td></td></tr><tr><td>Move camera 1 left</td><td>camera_move</td><td>POST /api/cameras/1/move</td><td class='metric-warn'>567</td><td class='metric-good'>78</td><td class='metric-good'>645</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>camera_id: 1<br>direction: left</td><td></td></tr><tr><td>Move camera 1 right</td><td>camera_move</td><td>POST /api/cameras/1/move</td><td class='metric-warn'>550</td><td class='metric-good'>88</td><td class='metric-good'>638</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>camera_id: 1<br>direction: right</td><td></td></tr><tr><td>Move camera 1 tele</td><td>camera_move</td><td>POST /api/cameras/1/move</td><td class='metric-bad'>648</td><td class='metric-good'>83</td><td class='metric-good'>730</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>camera_id: 1<br>direction: tele</td><td></td></tr><tr><td>Move camera 1 wide</td><td>camera_move</td><td>POST /api/cameras/1/move</td><td class='metric-bad'>634</td><td class='metric-good'>75</td><td class='metric-good'>709</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>camera_id: 1<br>direction: wide</td><td></td></tr><tr><td>Recall camera 1 preset Preset 1 (1)</td><td>camera_preset_call</td><td>POST /api/cameras/1/presets/call</td><td class='metric-bad'>1847</td><td class='metric-good'>91</td><td class='metric-good'>1938</td><td class='metric-good'>Acceptable</td><td><span class='badge badge-success'>OK</span></td><td>camera_id: 1<br>preset_id: 1</td><td></td></tr><tr><td>Recall camera 1 preset Preset 2 (2)</td><td>camera_preset_call</td><td>POST /api/cameras/1/presets/call</td><td class='metric-bad'>2004</td><td class='metric-good'>79</td><td class='metric-good'>2082</td><td class='metric-good'>Acceptable</td><td><span class='badge badge-success'>OK</span></td><td>camera_id: 1<br>preset_id: 2</td><td></td></tr><tr><td>Recall camera 1 preset Preset 3 (3)</td><td>camera_preset_call</td><td>POST /api/cameras/1/presets/call</td><td class='metric-bad'>2053</td><td class='metric-good'>92</td><td class='metric-good'>2145</td><td class='metric-good'>Acceptable</td><td><span class='badge badge-success'>OK</span></td><td>camera_id: 1<br>preset_id: 3</td><td></td></tr><tr><td>Change display1 (mna-240-9730064510_dpOut0) layout to full</td><td>change_layout</td><td>POST /api/devices/displays/mna-240-9730064510_dpOut0/changeLayout</td><td class='metric-good'>65</td><td class='metric-good'>43</td><td class='metric-good'>108</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>target_layout: full</td><td></td></tr><tr><td>Change display1 (mna-240-9730064510_dpOut0) layout to pip</td><td>change_layout</td><td>POST /api/devices/displays/mna-240-9730064510_dpOut0/changeLayout</td><td class='metric-good'>87</td><td class='metric-good'>32</td><td class='metric-good'>119</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>target_layout: pip</td><td></td></tr><tr><td>Change display1 (mna-240-9730064510_dpOut0) layout to pap</td><td>change_layout</td><td>POST /api/devices/displays/mna-240-9730064510_dpOut0/changeLayout</td><td class='metric-good'>104</td><td class='metric-good'>25</td><td class='metric-good'>130</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>target_layout: pap</td><td></td></tr><tr><td>Change display1 (mna-240-9730064510_dpOut0) layout to quad</td><td>change_layout</td><td>POST /api/devices/displays/mna-240-9730064510_dpOut0/changeLayout</td><td class='metric-good'>134</td><td class='metric-good'>37</td><td class='metric-good'>171</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>target_layout: quad</td><td></td></tr><tr><td>Change display1 (mna-240-9730064510_dpOut0) layout to wall</td><td>change_layout</td><td>POST /api/devices/displays/mna-240-9730064510_dpOut0/changeLayout</td><td class='metric-good'>189</td><td class='metric-good'>39</td><td class='metric-good'>228</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>target_layout: wall</td><td></td></tr><tr><td>Change display2 (mna-240-9730407262_dpOut0) layout to full</td><td>change_layout</td><td>POST /api/devices/displays/mna-240-9730407262_dpOut0/changeLayout</td><td class='metric-good'>45</td><td class='metric-good'>21</td><td class='metric-good'>65</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730407262_dpOut0<br>target_layout: full</td><td></td></tr><tr><td>Change display2 (mna-240-9730407262_dpOut0) layout to pip</td><td>change_layout</td><td>POST /api/devices/displays/mna-240-9730407262_dpOut0/changeLayout</td><td class='metric-bad'>1829</td><td class='metric-good'>27</td><td class='metric-warn'>1857</td><td class='metric-warn'>Borderline</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730407262_dpOut0<br>target_layout: pip</td><td></td></tr><tr><td>Change display2 (mna-240-9730407262_dpOut0) layout to pap</td><td>change_layout</td><td>POST /api/devices/displays/mna-240-9730407262_dpOut0/changeLayout</td><td class='metric-good'>112</td><td class='metric-good'>38</td><td class='metric-good'>149</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730407262_dpOut0<br>target_layout: pap</td><td></td></tr><tr><td>Change display2 (mna-240-9730407262_dpOut0) layout to quad</td><td>change_layout</td><td>POST /api/devices/displays/mna-240-9730407262_dpOut0/changeLayout</td><td class='metric-good'>136</td><td class='metric-good'>41</td><td class='metric-good'>177</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730407262_dpOut0<br>target_layout: quad</td><td></td></tr><tr><td>Change display2 (mna-240-9730407262_dpOut0) layout to wall</td><td>change_layout</td><td>POST /api/devices/displays/mna-240-9730407262_dpOut0/changeLayout</td><td class='metric-good'>170</td><td class='metric-good'>43</td><td class='metric-good'>213</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730407262_dpOut0<br>target_layout: wall</td><td></td></tr><tr><td>Change display3 (mna-420-2530840919_hdmiOut1) layout to full</td><td>change_layout</td><td>POST /api/devices/displays/mna-420-2530840919_hdmiOut1/changeLayout</td><td class='metric-good'>42</td><td class='metric-good'>28</td><td class='metric-good'>70</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-420-2530840919_hdmiOut1<br>target_layout: full</td><td></td></tr><tr><td>Change display3 (mna-420-2530840919_hdmiOut1) layout to pip</td><td>change_layout</td><td>POST /api/devices/displays/mna-420-2530840919_hdmiOut1/changeLayout</td><td class='metric-good'>130</td><td class='metric-good'>43</td><td class='metric-good'>173</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-420-2530840919_hdmiOut1<br>target_layout: pip</td><td></td></tr><tr><td>Change display3 (mna-420-2530840919_hdmiOut1) layout to pap</td><td>change_layout</td><td>POST /api/devices/displays/mna-420-2530840919_hdmiOut1/changeLayout</td><td class='metric-good'>92</td><td class='metric-good'>27</td><td class='metric-good'>119</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-420-2530840919_hdmiOut1<br>target_layout: pap</td><td></td></tr><tr><td>Mute speaker speaker1 (mna-440-2530831429_audioOut)</td><td>speaker_mute</td><td>POST /api/devices/speakers/mna-440-2530831429_audioOut/mute</td><td class='metric-good'>173</td><td class='metric-good'>40</td><td class='metric-good'>213</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>speaker_id: mna-440-2530831429_audioOut<br>target_mute: True</td><td></td></tr><tr><td>Set speaker speaker1 (mna-440-2530831429_audioOut) volume to 50%</td><td>speaker_volume</td><td>POST /api/devices/speakers/mna-440-2530831429_audioOut/changeVolume</td><td class='metric-good'>108</td><td class='metric-bad'>1971</td><td class='metric-bad'>2079</td><td class='metric-bad'>Poor</td><td><span class='badge badge-success'>OK</span></td><td>speaker_id: mna-440-2530831429_audioOut<br>target_volume: 50</td><td></td></tr><tr><td>Rename display display1 (mna-240-9730064510_dpOut0) to 'display1 (test)'</td><td>room_settings_rename</td><td>POST /api/room/settings</td><td class='metric-good'>291</td><td class='metric-bad'>1166</td><td class='metric-warn'>1457</td><td class='metric-warn'>Borderline</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>target_name: display1 (test)</td><td></td></tr><tr><td>Restore name for display display1 (mna-240-9730064510_dpOut0) to 'display1'</td><td>room_settings_rename</td><td>POST /api/room/settings</td><td class='metric-good'>115</td><td class='metric-warn'>870</td><td class='metric-good'>985</td><td class='metric-good'>Acceptable</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>target_name: display1</td><td></td></tr><tr><td>Rename speaker speaker1 (mna-440-2530831429_audioOut) to 'speaker1 (test)'</td><td>room_settings_rename_speaker</td><td>POST /api/room/settings</td><td class='metric-good'>14</td><td class='metric-good'>406</td><td class='metric-good'>420</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>target_name: speaker1 (test)<br>entity_id: mna-440-2530831429_audioOut</td><td></td></tr><tr><td>Restore name for speaker speaker1 (mna-440-2530831429_audioOut) to 'speaker1'</td><td>room_settings_rename_speaker</td><td>POST /api/room/settings</td><td class='metric-warn'>452</td><td class='metric-warn'>580</td><td class='metric-warn'>1032</td><td class='metric-warn'>Borderline</td><td><span class='badge badge-success'>OK</span></td><td>target_name: speaker1<br>entity_id: mna-440-2530831429_audioOut</td><td></td></tr><tr><td>Rename audio source audio1 (mna-440-2530831429_audioIn) to 'audio1 (test)'</td><td>room_settings_rename_audio_source</td><td>POST /api/room/settings</td><td class='metric-good'>46</td><td class='metric-warn'>786</td><td class='metric-good'>831</td><td class='metric-good'>Acceptable</td><td><span class='badge badge-success'>OK</span></td><td>target_name: audio1 (test)<br>entity_id: mna-440-2530831429_audioIn</td><td></td></tr><tr><td>Restore name for audio source audio1 (mna-440-2530831429_audioIn) to 'audio1'</td><td>room_settings_rename_audio_source</td><td>POST /api/room/settings</td><td class='metric-good'>13</td><td class='metric-bad'>3452</td><td class='metric-bad'>3465</td><td class='metric-bad'>Poor</td><td><span class='badge badge-success'>OK</span></td><td>target_name: audio1<br>entity_id: mna-440-2530831429_audioIn</td><td></td></tr><tr><td>Rename video source video1 (mna-440-2530831429_hdmiIn1) to 'video1 (test)'</td><td>room_settings_rename_video_source</td><td>POST /api/room/settings</td><td class='metric-good'>13</td><td class='metric-good'>438</td><td class='metric-good'>451</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>target_name: video1 (test)<br>entity_id: mna-440-2530831429_hdmiIn1</td><td></td></tr><tr><td>Restore name for video source video1 (mna-440-2530831429_hdmiIn1) to 'video1'</td><td>room_settings_rename_video_source</td><td>POST /api/room/settings</td><td class='metric-good'>14</td><td class='metric-bad'>4391</td><td class='metric-bad'>4404</td><td class='metric-bad'>Poor</td><td><span class='badge badge-success'>OK</span></td><td>target_name: video1<br>entity_id: mna-440-2530831429_hdmiIn1</td><td></td></tr><tr><td>Check PIP/PAP for display display1 (mna-240-9730064510_dpOut0)</td><td>room_settings_layout_capability</td><td>POST /api/room/settings<br>GET /api/room/settings<br>GET /api/devices/displays</td><td class='metric-good'>233</td><td class='metric-good'>52</td><td class='metric-good'>360</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>field: pip_pap<br>target_flags: {'pip_pap': True, 'quad': False, 'wall': False}</td><td></td></tr><tr><td>Check Quad View for display display1 (mna-240-9730064510_dpOut0)</td><td>room_settings_layout_capability</td><td>POST /api/room/settings<br>GET /api/room/settings<br>GET /api/devices/displays</td><td class='metric-good'>120</td><td class='metric-good'>48</td><td class='metric-good'>232</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>field: quad<br>target_flags: {'pip_pap': True, 'quad': True, 'wall': False}</td><td></td></tr><tr><td>Check Wall for display display1 (mna-240-9730064510_dpOut0)</td><td>room_settings_layout_capability</td><td>POST /api/room/settings<br>GET /api/room/settings<br>GET /api/devices/displays</td><td class='metric-good'>106</td><td class='metric-good'>49</td><td class='metric-good'>236</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>field: wall<br>target_flags: {'pip_pap': True, 'quad': True, 'wall': True}</td><td></td></tr><tr><td>Uncheck Wall for display display1 (mna-240-9730064510_dpOut0)</td><td>room_settings_layout_capability</td><td>POST /api/room/settings<br>GET /api/room/settings<br>GET /api/devices/displays</td><td class='metric-bad'>3964</td><td class='metric-good'>51</td><td class='metric-bad'>4094</td><td class='metric-bad'>Poor</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>field: wall<br>target_flags: {'pip_pap': True, 'quad': True, 'wall': False}</td><td></td></tr><tr><td>Uncheck Quad View for display display1 (mna-240-9730064510_dpOut0)</td><td>room_settings_layout_capability</td><td>POST /api/room/settings<br>GET /api/room/settings<br>GET /api/devices/displays</td><td class='metric-good'>146</td><td class='metric-good'>48</td><td class='metric-good'>263</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>field: quad<br>target_flags: {'pip_pap': True, 'quad': False, 'wall': False}</td><td></td></tr><tr><td>Uncheck PIP/PAP for display display1 (mna-240-9730064510_dpOut0)</td><td>room_settings_layout_capability</td><td>POST /api/room/settings<br>GET /api/room/settings<br>GET /api/devices/displays</td><td class='metric-good'>180</td><td class='metric-good'>44</td><td class='metric-good'>281</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>display_id: mna-240-9730064510_dpOut0<br>field: pip_pap<br>target_flags: {'pip_pap': False, 'quad': False, 'wall': False}</td><td></td></tr><tr><td>Grant share of video1 (mna-440-2530831429_hdmiIn1) with room Emergency OR-12 ([internal-host])</td><td>source_share</td><td>POST /api/room/share</td><td class='metric-good'>98</td><td class='metric-good'>28</td><td class='metric-good'>126</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>source_id: mna-440-2530831429_hdmiIn1<br>source_room: [internal-host]<br>requesting_room: [internal-host]<br>status: grant</td><td></td></tr><tr><td>Revoke share of video1 (mna-440-2530831429_hdmiIn1) with room Emergency OR-12 ([internal-host])</td><td>source_unshare</td><td>POST /api/room/share</td><td class='metric-bad'>1933</td><td class='metric-good'>38</td><td class='metric-warn'>1971</td><td class='metric-warn'>Borderline</td><td><span class='badge badge-success'>OK</span></td><td>source_id: mna-440-2530831429_hdmiIn1<br>source_room: [internal-host]<br>requesting_room: [internal-host]<br>status: revoke</td><td></td></tr><tr><td>Test room camera 1 connection</td><td>camera_test_connection</td><td>POST /api/cameras/1/testConnection</td><td class='metric-good'>197</td><td class='metric-bad'>-</td><td class='metric-good'>197</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>camera_id: 1<br>endpoint: http://[internal-host]</td><td></td></tr><tr><td>Save room camera 1 settings</td><td>room_camera_save</td><td>POST /api/room/settings</td><td class='metric-good'>158</td><td class='metric-good'>67</td><td class='metric-good'>225</td><td class='metric-good'>Excellent</td><td><span class='badge badge-success'>OK</span></td><td>camera_id: 1</td><td></td></tr>
+    </table>
+        
+    
+    <h2>Action Timeline</h2>
+    <div class="section-note">
+        <strong>Performance breakdown:</strong> Each bar shows API request time (blue) + UI reflection time (green). Scale: 0-3000ms.
+    </div>
+    <div class="timeline">
+        <div class="timeline-header">
+            <div class="timeline-header-label">Action</div>
+            <div class="timeline-header-scale">
+                <span>0ms</span><span>750ms</span><span>1500ms</span><span>2250ms</span><span>3000ms</span>
+            </div>
+            <div class="timeline-times" style="text-align: right; padding-left: 1.5rem;">Total</div>
+        </div>
+        <div class="timeline-row">
+                    <div class="timeline-label" title="Route OR04 S4 (mna-440-2530831456_hdmiIn1) to display1 (mna-240-9730064510_dpOut0)">Route OR04 S4 (mna-440-2530831456_hdmiIn1) to display1 (mna-240-9730064510_dpOut0)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 50ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 31ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">81ms<br><span style="font-size: 0.65rem; color: #a0aec0;">50 + 31</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Unroute from display1 (mna-240-9730064510_dpOut0)">Unroute from display1 (mna-240-9730064510_dpOut0)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 30ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 25ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">55ms<br><span style="font-size: 0.65rem; color: #a0aec0;">30 + 25</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Route OR04 S4 (mna-440-2530831456_hdmiIn1) to display2 (mna-240-9730407262_dpOut0)">Route OR04 S4 (mna-440-2530831456_hdmiIn1) to display2 (mna-240-9730407262_dpOut0)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 44ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 58ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">102ms<br><span style="font-size: 0.65rem; color: #a0aec0;">44 + 58</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Unroute from display2 (mna-240-9730407262_dpOut0)">Unroute from display2 (mna-240-9730407262_dpOut0)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 46ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 35ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">81ms<br><span style="font-size: 0.65rem; color: #a0aec0;">46 + 35</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Route OR04 S4 (mna-440-2530831456_hdmiIn1) to display3 (mna-420-2530840919_hdmiOut1)">Route OR04 S4 (mna-440-2530831456_hdmiIn1) to display3 (mna-420-2530840919_hdmiOut1)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.1%;" title="API: 64ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 30ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">94ms<br><span style="font-size: 0.65rem; color: #a0aec0;">64 + 30</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Unroute from display3 (mna-420-2530840919_hdmiOut1)">Unroute from display3 (mna-420-2530840919_hdmiOut1)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 34ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 30ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">64ms<br><span style="font-size: 0.65rem; color: #a0aec0;">34 + 30</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Route audio audio1 (mna-440-2530831429_audioIn) to speaker1 (mna-440-2530831429_audioOut)">Route audio audio1 (mna-440-2530831429_audioIn) to speaker1 (mna-440-2530831429_audioOut)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.3%;" title="API: 70ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.3%;" title="UI reflection: 68ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">138ms<br><span style="font-size: 0.65rem; color: #a0aec0;">70 + 68</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Unroute audio from speaker1 (mna-440-2530831429_audioOut)">Unroute audio from speaker1 (mna-440-2530831429_audioOut)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 25ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 52ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">77ms<br><span style="font-size: 0.65rem; color: #a0aec0;">25 + 52</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Call room preset 1">Call room preset 1</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 37.0%;" title="API: 1111ms">
+                                <span class="timeline-bar-text">1111ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 46ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">1157ms<br><span style="font-size: 0.65rem; color: #a0aec0;">1111 + 46</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Rename preset 1 to 'Picture-in-Picture Layout (test)'">Rename preset 1 to 'Picture-in-Picture Layout (test)'</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 12ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 6ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">18ms<br><span style="font-size: 0.65rem; color: #a0aec0;">12 + 6</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Restore name for preset 1 to 'Picture-in-Picture Layout'">Restore name for preset 1 to 'Picture-in-Picture Layout'</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 5ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 5ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">10ms<br><span style="font-size: 0.65rem; color: #a0aec0;">5 + 5</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Move camera 1 up">Move camera 1 up</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 16.5%;" title="API: 495ms">
+                                <span class="timeline-bar-text">495ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.6%;" title="UI reflection: 78ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">573ms<br><span style="font-size: 0.65rem; color: #a0aec0;">495 + 78</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Move camera 1 down">Move camera 1 down</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 16.2%;" title="API: 486ms">
+                                <span class="timeline-bar-text">486ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.9%;" title="UI reflection: 87ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">573ms<br><span style="font-size: 0.65rem; color: #a0aec0;">486 + 87</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Move camera 1 left">Move camera 1 left</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 18.9%;" title="API: 567ms">
+                                <span class="timeline-bar-text">567ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.6%;" title="UI reflection: 78ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">645ms<br><span style="font-size: 0.65rem; color: #a0aec0;">567 + 78</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Move camera 1 right">Move camera 1 right</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 18.3%;" title="API: 550ms">
+                                <span class="timeline-bar-text">550ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.9%;" title="UI reflection: 88ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">638ms<br><span style="font-size: 0.65rem; color: #a0aec0;">550 + 88</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Move camera 1 tele">Move camera 1 tele</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 21.6%;" title="API: 648ms">
+                                <span class="timeline-bar-text">648ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.8%;" title="UI reflection: 83ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">730ms<br><span style="font-size: 0.65rem; color: #a0aec0;">648 + 83</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Move camera 1 wide">Move camera 1 wide</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 21.1%;" title="API: 634ms">
+                                <span class="timeline-bar-text">634ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.5%;" title="UI reflection: 75ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">709ms<br><span style="font-size: 0.65rem; color: #a0aec0;">634 + 75</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Recall camera 1 preset Preset 1 (1)">Recall camera 1 preset Preset 1 (1)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 61.6%;" title="API: 1847ms">
+                                <span class="timeline-bar-text">1847ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 3.0%;" title="UI reflection: 91ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">1938ms<br><span style="font-size: 0.65rem; color: #a0aec0;">1847 + 91</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Recall camera 1 preset Preset 2 (2)">Recall camera 1 preset Preset 2 (2)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 66.8%;" title="API: 2004ms">
+                                <span class="timeline-bar-text">2004ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.6%;" title="UI reflection: 79ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">2082ms<br><span style="font-size: 0.65rem; color: #a0aec0;">2004 + 79</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Recall camera 1 preset Preset 3 (3)">Recall camera 1 preset Preset 3 (3)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 68.4%;" title="API: 2053ms">
+                                <span class="timeline-bar-text">2053ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 3.1%;" title="UI reflection: 92ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">2145ms<br><span style="font-size: 0.65rem; color: #a0aec0;">2053 + 92</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display1 (mna-240-9730064510_dpOut0) layout to full">Change display1 (mna-240-9730064510_dpOut0) layout to full</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.2%;" title="API: 65ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 43ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">108ms<br><span style="font-size: 0.65rem; color: #a0aec0;">65 + 43</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display1 (mna-240-9730064510_dpOut0) layout to pip">Change display1 (mna-240-9730064510_dpOut0) layout to pip</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.9%;" title="API: 87ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 32ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">119ms<br><span style="font-size: 0.65rem; color: #a0aec0;">87 + 32</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display1 (mna-240-9730064510_dpOut0) layout to pap">Change display1 (mna-240-9730064510_dpOut0) layout to pap</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 3.5%;" title="API: 104ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 25ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">130ms<br><span style="font-size: 0.65rem; color: #a0aec0;">104 + 25</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display1 (mna-240-9730064510_dpOut0) layout to quad">Change display1 (mna-240-9730064510_dpOut0) layout to quad</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 4.5%;" title="API: 134ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 37ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">171ms<br><span style="font-size: 0.65rem; color: #a0aec0;">134 + 37</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display1 (mna-240-9730064510_dpOut0) layout to wall">Change display1 (mna-240-9730064510_dpOut0) layout to wall</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 6.3%;" title="API: 189ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 39ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">228ms<br><span style="font-size: 0.65rem; color: #a0aec0;">189 + 39</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display2 (mna-240-9730407262_dpOut0) layout to full">Change display2 (mna-240-9730407262_dpOut0) layout to full</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 45ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 21ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">65ms<br><span style="font-size: 0.65rem; color: #a0aec0;">45 + 21</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display2 (mna-240-9730407262_dpOut0) layout to pip">Change display2 (mna-240-9730407262_dpOut0) layout to pip</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 61.0%;" title="API: 1829ms">
+                                <span class="timeline-bar-text">1829ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 27ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">1857ms<br><span style="font-size: 0.65rem; color: #a0aec0;">1829 + 27</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display2 (mna-240-9730407262_dpOut0) layout to pap">Change display2 (mna-240-9730407262_dpOut0) layout to pap</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 3.7%;" title="API: 112ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 38ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">149ms<br><span style="font-size: 0.65rem; color: #a0aec0;">112 + 38</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display2 (mna-240-9730407262_dpOut0) layout to quad">Change display2 (mna-240-9730407262_dpOut0) layout to quad</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 4.5%;" title="API: 136ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 41ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">177ms<br><span style="font-size: 0.65rem; color: #a0aec0;">136 + 41</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display2 (mna-240-9730407262_dpOut0) layout to wall">Change display2 (mna-240-9730407262_dpOut0) layout to wall</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 5.7%;" title="API: 170ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 43ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">213ms<br><span style="font-size: 0.65rem; color: #a0aec0;">170 + 43</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display3 (mna-420-2530840919_hdmiOut1) layout to full">Change display3 (mna-420-2530840919_hdmiOut1) layout to full</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 42ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 28ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">70ms<br><span style="font-size: 0.65rem; color: #a0aec0;">42 + 28</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display3 (mna-420-2530840919_hdmiOut1) layout to pip">Change display3 (mna-420-2530840919_hdmiOut1) layout to pip</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 4.3%;" title="API: 130ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 43ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">173ms<br><span style="font-size: 0.65rem; color: #a0aec0;">130 + 43</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Change display3 (mna-420-2530840919_hdmiOut1) layout to pap">Change display3 (mna-420-2530840919_hdmiOut1) layout to pap</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 3.1%;" title="API: 92ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 27ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">119ms<br><span style="font-size: 0.65rem; color: #a0aec0;">92 + 27</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Mute speaker speaker1 (mna-440-2530831429_audioOut)">Mute speaker speaker1 (mna-440-2530831429_audioOut)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 5.8%;" title="API: 173ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 40ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">213ms<br><span style="font-size: 0.65rem; color: #a0aec0;">173 + 40</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Set speaker speaker1 (mna-440-2530831429_audioOut) volume to 50%">Set speaker speaker1 (mna-440-2530831429_audioOut) volume to 50%</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 3.6%;" title="API: 108ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 65.7%;" title="UI reflection: 1971ms">
+                                <span class="timeline-bar-text">1971ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">2079ms<br><span style="font-size: 0.65rem; color: #a0aec0;">108 + 1971</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Rename display display1 (mna-240-9730064510_dpOut0) to 'display1 (test)'">Rename display display1 (mna-240-9730064510_dpOut0) to 'display1 (test)'</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 9.7%;" title="API: 291ms">
+                                <span class="timeline-bar-text">291ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 38.9%;" title="UI reflection: 1166ms">
+                                <span class="timeline-bar-text">1166ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">1457ms<br><span style="font-size: 0.65rem; color: #a0aec0;">291 + 1166</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Restore name for display display1 (mna-240-9730064510_dpOut0) to 'display1'">Restore name for display display1 (mna-240-9730064510_dpOut0) to 'display1'</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 3.8%;" title="API: 115ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 29.0%;" title="UI reflection: 870ms">
+                                <span class="timeline-bar-text">870ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">985ms<br><span style="font-size: 0.65rem; color: #a0aec0;">115 + 870</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Rename speaker speaker1 (mna-440-2530831429_audioOut) to 'speaker1 (test)'">Rename speaker speaker1 (mna-440-2530831429_audioOut) to 'speaker1 (test)'</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 14ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 13.5%;" title="UI reflection: 406ms">
+                                <span class="timeline-bar-text">406ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">420ms<br><span style="font-size: 0.65rem; color: #a0aec0;">14 + 406</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Restore name for speaker speaker1 (mna-440-2530831429_audioOut) to 'speaker1'">Restore name for speaker speaker1 (mna-440-2530831429_audioOut) to 'speaker1'</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 15.1%;" title="API: 452ms">
+                                <span class="timeline-bar-text">452ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 19.3%;" title="UI reflection: 580ms">
+                                <span class="timeline-bar-text">580ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">1032ms<br><span style="font-size: 0.65rem; color: #a0aec0;">452 + 580</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Rename audio source audio1 (mna-440-2530831429_audioIn) to 'audio1 (test)'">Rename audio source audio1 (mna-440-2530831429_audioIn) to 'audio1 (test)'</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 46ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 26.2%;" title="UI reflection: 786ms">
+                                <span class="timeline-bar-text">786ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">831ms<br><span style="font-size: 0.65rem; color: #a0aec0;">46 + 786</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Restore name for audio source audio1 (mna-440-2530831429_audioIn) to 'audio1'">Restore name for audio source audio1 (mna-440-2530831429_audioIn) to 'audio1'</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 13ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 99.6%;" title="UI reflection: 3452ms">
+                                <span class="timeline-bar-text">3452ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">3465ms<br><span style="font-size: 0.65rem; color: #a0aec0;">13 + 3452</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Rename video source video1 (mna-440-2530831429_hdmiIn1) to 'video1 (test)'">Rename video source video1 (mna-440-2530831429_hdmiIn1) to 'video1 (test)'</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 13ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 14.6%;" title="UI reflection: 438ms">
+                                <span class="timeline-bar-text">438ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">451ms<br><span style="font-size: 0.65rem; color: #a0aec0;">13 + 438</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Restore name for video source video1 (mna-440-2530831429_hdmiIn1) to 'video1'">Restore name for video source video1 (mna-440-2530831429_hdmiIn1) to 'video1'</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 2.0%;" title="API: 14ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 99.5%;" title="UI reflection: 4391ms">
+                                <span class="timeline-bar-text">4391ms</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">4404ms<br><span style="font-size: 0.65rem; color: #a0aec0;">14 + 4391</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Check PIP/PAP for display display1 (mna-240-9730064510_dpOut0)">Check PIP/PAP for display display1 (mna-240-9730064510_dpOut0)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 7.8%;" title="API: 233ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 52ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">360ms<br><span style="font-size: 0.65rem; color: #a0aec0;">233 + 52</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Check Quad View for display display1 (mna-240-9730064510_dpOut0)">Check Quad View for display display1 (mna-240-9730064510_dpOut0)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 4.0%;" title="API: 120ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 48ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">232ms<br><span style="font-size: 0.65rem; color: #a0aec0;">120 + 48</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Check Wall for display display1 (mna-240-9730064510_dpOut0)">Check Wall for display display1 (mna-240-9730064510_dpOut0)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 3.5%;" title="API: 106ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 49ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">236ms<br><span style="font-size: 0.65rem; color: #a0aec0;">106 + 49</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Uncheck Wall for display display1 (mna-240-9730064510_dpOut0)">Uncheck Wall for display display1 (mna-240-9730064510_dpOut0)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 100.0%;" title="API: 3964ms">
+                                <span class="timeline-bar-text">3964ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 51ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">4094ms<br><span style="font-size: 0.65rem; color: #a0aec0;">3964 + 51</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Uncheck Quad View for display display1 (mna-240-9730064510_dpOut0)">Uncheck Quad View for display display1 (mna-240-9730064510_dpOut0)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 4.9%;" title="API: 146ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 48ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">263ms<br><span style="font-size: 0.65rem; color: #a0aec0;">146 + 48</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Uncheck PIP/PAP for display display1 (mna-240-9730064510_dpOut0)">Uncheck PIP/PAP for display display1 (mna-240-9730064510_dpOut0)</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 6.0%;" title="API: 180ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 44ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">281ms<br><span style="font-size: 0.65rem; color: #a0aec0;">180 + 44</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Grant share of video1 (mna-440-2530831429_hdmiIn1) with room Emergency OR-12 ([internal-host])">Grant share of video1 (mna-440-2530831429_hdmiIn1) with room Emergency OR-12 ([internal-host])</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 3.3%;" title="API: 98ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 28ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">126ms<br><span style="font-size: 0.65rem; color: #a0aec0;">98 + 28</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Revoke share of video1 (mna-440-2530831429_hdmiIn1) with room Emergency OR-12 ([internal-host])">Revoke share of video1 (mna-440-2530831429_hdmiIn1) with room Emergency OR-12 ([internal-host])</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 64.4%;" title="API: 1933ms">
+                                <span class="timeline-bar-text">1933ms</span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.0%;" title="UI reflection: 38ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">1971ms<br><span style="font-size: 0.65rem; color: #a0aec0;">1933 + 38</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Test room camera 1 connection">Test room camera 1 connection</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 6.6%;" title="API: 197ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 0.0%;" title="UI reflection: 0ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">197ms<br><span style="font-size: 0.65rem; color: #a0aec0;">197 + 0</span></div>
+                </div><div class="timeline-row">
+                    <div class="timeline-label" title="Save room camera 1 settings">Save room camera 1 settings</div>
+                    <div class="timeline-track">
+                        <div class="timeline-bars">
+                            <div class="timeline-bar bar-api" style="width: 5.3%;" title="API: 158ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                            <div class="timeline-bar bar-ui" style="width: 2.2%;" title="UI reflection: 67ms">
+                                <span class="timeline-bar-text"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="timeline-times">225ms<br><span style="font-size: 0.65rem; color: #a0aec0;">158 + 67</span></div>
+                </div>
+        <div class="timeline-legend">
+            <div class="timeline-legend-item">
+                <div class="timeline-legend-box" style="background: linear-gradient(135deg, #4299e1 0%, #2b6cb0 100%);"></div>
+                <span>API Request</span>
+            </div>
+            <div class="timeline-legend-item">
+                <div class="timeline-legend-box" style="background: linear-gradient(135deg, #48bb78 0%, #2f855a 100%);"></div>
+                <span>UI Reflection (polling)</span>
+            </div>
+            <div class="timeline-legend-item">
+                <div class="timeline-legend-box" style="background: linear-gradient(135deg, #fc8181 0%, #c53030 100%);"></div>
+                <span>Failed Action</span>
+            </div>
+        </div>
+    </div>
+        
+    
+        </div>
+    </div>
+
+</body>
+</html>

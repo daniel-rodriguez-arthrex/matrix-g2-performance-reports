@@ -1,0 +1,16 @@
+{
+  "slug": "all_OR1_2026-08-18_09-01-41",
+  "workflow": "ALL",
+  "room": "OR1",
+  "timestamp": "2026-08-18T09:02:46",
+  "date": "Aug 18, 2026",
+  "status": "FAIL",
+  "actions_passed": 53,
+  "actions_total": 53,
+  "avg_api": "120ms",
+  "p95_api": "2018ms",
+  "workflow_api_calls": "67",
+  "errors": "3",
+  "published_at": "2026-08-19 00:12 UTC",
+  "title": "ALL - Room OR1"
+}
