@@ -32,8 +32,20 @@ def convert(html_path: Path, pdf_path: Path) -> None:
 
         # Measure the real rendered content width and scale to fit the page width so
         # nothing is clipped. Cap at 1.0 so narrow reports are never enlarged.
+        #
+        # document/body.scrollWidth alone under-measures this report: wide inner
+        # elements (e.g. the Actions table, which can be wider than its containing
+        # card) don't always force the document itself to scroll, so their overflow
+        # would get silently clipped at print time. Scan every element instead and
+        # take the true widest scrollWidth on the page.
         content_width = page.evaluate(
-            "() => Math.max(document.documentElement.scrollWidth, document.body.scrollWidth)"
+            """
+            () => Math.max(
+                document.documentElement.scrollWidth,
+                document.body.scrollWidth,
+                ...Array.from(document.querySelectorAll('*'), (e) => e.scrollWidth)
+            )
+            """
         )
         scale = min(1.0, PRINTABLE_WIDTH_PX / content_width) if content_width else 1.0
         scale = max(0.1, round(scale, 2))  # Playwright requires scale in [0.1, 2]
