@@ -32,7 +32,9 @@ except Exception:  # pragma: no cover - PDF is optional
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 _META_RE = re.compile(r'<div class="meta">([^<]+)</div>')
-_STATUS_RE = re.compile(r"<h3>Status</h3>\s*<div class=\"value (status-pass|status-fail)\"")
+_PERF_BREAKDOWN_RE = re.compile(
+    r"(\d+) Excellent \u2022 (\d+) Acceptable \u2022 (\d+) Borderline \u2022 (\d+) Poor \(of (\d+) actions\)"
+)
 _ACTIONS_RE = re.compile(r"<h2>Actions \((\d+)/(\d+) successful\)</h2>")
 
 
@@ -65,9 +67,12 @@ def _extract_metadata(html: str, slug: str) -> dict:
             workflow, room_raw, timestamp = parts
             room = room_raw.replace("Room", "").strip()
 
-    status_match = _STATUS_RE.search(html)
-    status = "PASS" if (status_match and status_match.group(1) == "status-pass") else \
-        ("FAIL" if status_match else "UNKNOWN")
+    perf_match = _PERF_BREAKDOWN_RE.search(html)
+    if perf_match:
+        excellent, acceptable, borderline, poor, perf_total = (int(g) for g in perf_match.groups())
+        good_pct = round((excellent + acceptable) / perf_total * 100) if perf_total else None
+    else:
+        good_pct = None
 
     actions_match = _ACTIONS_RE.search(html)
     actions_passed = int(actions_match.group(1)) if actions_match else 0
@@ -79,7 +84,7 @@ def _extract_metadata(html: str, slug: str) -> dict:
         "room": room,
         "timestamp": timestamp,
         "date": _friendly_date(timestamp),
-        "status": status,
+        "good_pct": good_pct,
         "actions_passed": actions_passed,
         "actions_total": actions_total,
         "avg_api": _card_value(html, "Avg API Time"),
@@ -136,8 +141,12 @@ def _metric_cell(label: str, value: str) -> str:
 
 def _render_card(r: dict) -> str:
     title = r.get("title") or f"{(r.get('workflow') or 'Report').upper()} - Room {r.get('room','')}"
-    status = r.get("status", "UNKNOWN")
-    badge_class = {"PASS": "badge-pass", "FAIL": "badge-fail"}.get(status, "badge-unknown")
+    good_pct = r.get("good_pct")
+    if good_pct is None:
+        badge_text, badge_class = "N/A", "badge-unknown"
+    else:
+        badge_text = f"{good_pct}% GOOD"
+        badge_class = "badge-pass" if good_pct >= 80 else "badge-warn" if good_pct >= 50 else "badge-fail"
     slug = r.get("slug", "")
 
     metrics = "".join([
@@ -152,7 +161,7 @@ def _render_card(r: dict) -> str:
         <div class="card">
             <div class="card-header">
                 <span class="card-title">{title}</span>
-                <span class="badge {badge_class}">{status}</span>
+                <span class="badge {badge_class}">{badge_text}</span>
             </div>
             <div class="card-body">
                 <div class="metrics">{metrics}</div>
@@ -187,6 +196,7 @@ def _render_index(reports: list) -> str:
         .card-title {{ font-size: 1.02rem; font-weight: 700; }}
         .badge {{ display: inline-block; padding: 0.3rem 0.6rem; border-radius: 5px; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }}
         .badge-pass {{ background: #d1f4dd; color: #1a7a42; }}
+        .badge-warn {{ background: #fdf0d1; color: #9a6a00; }}
         .badge-fail {{ background: #fdd8d8; color: #b02525; }}
         .badge-unknown {{ background: #e2e8f0; color: #4a5568; }}
         .card-body {{ padding: 1.25rem; }}

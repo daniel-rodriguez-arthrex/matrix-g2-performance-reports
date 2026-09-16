@@ -63,6 +63,7 @@ select, input[type="text"], input[type="number"] {
 .rcard-title { font-size: 0.95rem; font-weight: 700; }
 .badge { padding: 0.25rem 0.55rem; border-radius: 5px; font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
 .badge-pass { background: #d1f4dd; color: #1a7a42; }
+.badge-warn { background: #fdf0d1; color: #9a6a00; }
 .badge-fail { background: #fdd8d8; color: #b02525; }
 .badge-unknown { background: #e2e8f0; color: #4a5568; }
 .rcard-body { padding: 1rem 1.1rem; }

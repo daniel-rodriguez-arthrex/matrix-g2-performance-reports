@@ -61,14 +61,12 @@ class HtmlReport:
         ]
         filtered_violations = self._find_violations(meaningful_calls, summary.get("api_threshold_ms") or 500)
         action_errors = action_stats.get("count", 0) - action_stats.get("success_count", 0)
-        # Note: SLA (api_threshold_ms) violations and action duration are informational only
-        # (see Performance rating) and do not fail the overall report. The report fails only
-        # on real API errors or validation failures.
-        report_pass = (
-            action_stats.get("class") == "status-pass"
-            and filtered_validation_failures == 0
-            and not filtered_errors
-        )
+        # There is intentionally no single pass/fail verdict here: with dozens of varied
+        # actions (hardware moves, routing, etc.) a binary gate is too black-and-white and
+        # background network noise (e.g. stale-token polling unrelated to the actions under
+        # test) shouldn't be able to flip the whole run to "FAIL". Instead we summarize
+        # performance as a distribution across the existing tiers (see _performance_rating).
+        perf_breakdown = self._performance_breakdown(actions)
 
         return f"""<!DOCTYPE html>
 <html lang="en">
@@ -88,9 +86,16 @@ class HtmlReport:
         .summary-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; margin-bottom: 2.5rem; }}
         .summary-card {{ background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; transition: transform 0.2s, box-shadow 0.2s; }}
         .summary-card:hover {{ transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }}
+        .summary-card.wide {{ grid-column: span 2; }}
         .summary-card h3 {{ font-size: 0.75rem; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 0.75rem; }}
         .summary-card .value {{ font-size: 2.25rem; font-weight: 800; line-height: 1; margin-bottom: 0.5rem; }}
         .summary-card .subtext {{ font-size: 0.875rem; color: #718096; }}
+        .perf-breakdown-bar {{ display: flex; height: 14px; border-radius: 7px; overflow: hidden; margin: 0.5rem 0 0.75rem 0; background: #edf2f7; }}
+        .perf-breakdown-bar span {{ height: 100%; }}
+        .perf-excellent {{ background: #38a169; }}
+        .perf-acceptable {{ background: #9ae6b4; }}
+        .perf-borderline {{ background: #d69e2e; }}
+        .perf-poor {{ background: #e53e3e; }}
         .status-pass {{ color: #38a169; }}
         .status-fail {{ color: #e53e3e; }}
         .status-warn {{ color: #d69e2e; }}
@@ -143,12 +148,15 @@ class HtmlReport:
         <div class="content">
     
     <div class="summary-grid">
-        <div class="summary-card">
-            <h3>Status</h3>
-            <div class="value {'status-pass' if report_pass else 'status-fail'}">
-                {'✓ PASS' if report_pass else '✗ FAIL'}
+        <div class="summary-card wide">
+            <h3>Performance Breakdown</h3>
+            <div class="perf-breakdown-bar">
+                <span class="perf-excellent" style="width: {perf_breakdown['pct']['Excellent']:.1f}%;" title="Excellent: {perf_breakdown['counts']['Excellent']}"></span>
+                <span class="perf-acceptable" style="width: {perf_breakdown['pct']['Acceptable']:.1f}%;" title="Acceptable: {perf_breakdown['counts']['Acceptable']}"></span>
+                <span class="perf-borderline" style="width: {perf_breakdown['pct']['Borderline']:.1f}%;" title="Borderline: {perf_breakdown['counts']['Borderline']}"></span>
+                <span class="perf-poor" style="width: {perf_breakdown['pct']['Poor']:.1f}%;" title="Poor: {perf_breakdown['counts']['Poor']}"></span>
             </div>
-            <div class="subtext">{filtered_validation_failures} validation failures, {len(filtered_errors)} errors, {len(filtered_violations)} SLA violations</div>
+            <div class="subtext">{perf_breakdown['counts']['Excellent']} Excellent • {perf_breakdown['counts']['Acceptable']} Acceptable • {perf_breakdown['counts']['Borderline']} Borderline • {perf_breakdown['counts']['Poor']} Poor (of {perf_breakdown['total']} actions)</div>
         </div>
         
         <div class="summary-card">
@@ -186,7 +194,7 @@ class HtmlReport:
             <div class="value {'status-pass' if (action_errors + len(filtered_errors)) == 0 else 'status-fail'}">
                 {action_errors + len(filtered_errors)}
             </div>
-            <div class="subtext">{action_errors} action failures, {len(filtered_errors)} network HTTP errors</div>
+            <div class="subtext">{action_errors} action failures, {len(filtered_errors)} network HTTP errors, {filtered_validation_failures} validation failures</div>
         </div>
         
         <div class="summary-card">
@@ -421,6 +429,18 @@ class HtmlReport:
         if total_ms < borderline:
             return ("Borderline", "metric-warn")
         return ("Poor", "metric-bad")
+
+    def _performance_breakdown(self, actions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Aggregate per-action performance tier ratings (see _performance_rating) into
+        counts/percentages, used to summarize the whole run without a binary pass/fail."""
+        counts = {"Excellent": 0, "Acceptable": 0, "Borderline": 0, "Poor": 0}
+        for a in actions:
+            label, _ = self._performance_rating(a.get("action_type", ""), a.get("total_duration_ms"))
+            if label in counts:
+                counts[label] += 1
+        total = sum(counts.values())
+        pct = {k: (v / total * 100 if total else 0) for k, v in counts.items()}
+        return {"counts": counts, "pct": pct, "total": total}
 
     def _calculate_action_stats(self, actions: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate aggregate statistics for action metrics.

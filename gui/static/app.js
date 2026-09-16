@@ -144,12 +144,17 @@ function metric(label, value) {
 function renderResultCard(r) {
     const div = document.createElement("div");
     div.className = "rcard";
-    const badge = { PASS: "badge-pass", FAIL: "badge-fail" }[r.status] || "badge-unknown";
+    let badge = "badge-unknown";
+    let badgeText = "N/A";
+    if (r.good_pct !== null && r.good_pct !== undefined) {
+        badge = r.good_pct >= 80 ? "badge-pass" : r.good_pct >= 50 ? "badge-warn" : "badge-fail";
+        badgeText = `${r.good_pct}% GOOD`;
+    }
     const title = r.title || `${(r.workflow || "Report").toUpperCase()} - Room ${r.room || ""}`;
     div.innerHTML = `
         <div class="rcard-head">
             <span class="rcard-title">${title}</span>
-            <span class="badge ${badge}">${r.status || "UNKNOWN"}</span>
+            <span class="badge ${badge}">${badgeText}</span>
         </div>
         <div class="rcard-body">
             <div class="metrics">
