@@ -4,13 +4,13 @@
   "room": "OR1",
   "timestamp": "2026-09-16T09:06:23",
   "date": "Sep 16, 2026",
-  "status": "FAIL",
+  "good_pct": 85,
   "actions_passed": 265,
   "actions_total": 265,
   "avg_api": "195ms",
   "p95_api": "2017ms",
   "workflow_api_calls": "335",
   "errors": "15",
-  "published_at": "2026-09-16 16:10 UTC",
+  "published_at": "2026-09-16 16:44 UTC",
   "title": "ALL - Room OR1"
 }

@@ -16,9 +16,16 @@
         .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.25rem; margin-bottom: 2.5rem; }
         .summary-card { background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%); padding: 1.5rem; border-radius: 12px; border: 1px solid #e2e8f0; transition: transform 0.2s, box-shadow 0.2s; }
         .summary-card:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
+        .summary-card.wide { grid-column: span 2; }
         .summary-card h3 { font-size: 0.75rem; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; margin-bottom: 0.75rem; }
         .summary-card .value { font-size: 2.25rem; font-weight: 800; line-height: 1; margin-bottom: 0.5rem; }
         .summary-card .subtext { font-size: 0.875rem; color: #718096; }
+        .perf-breakdown-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; margin: 0.5rem 0 0.75rem 0; background: #edf2f7; }
+        .perf-breakdown-bar span { height: 100%; }
+        .perf-excellent { background: #38a169; }
+        .perf-acceptable { background: #9ae6b4; }
+        .perf-borderline { background: #d69e2e; }
+        .perf-poor { background: #e53e3e; }
         .status-pass { color: #38a169; }
         .status-fail { color: #e53e3e; }
         .status-warn { color: #d69e2e; }
@@ -71,12 +78,15 @@
         <div class="content">
     
     <div class="summary-grid">
-        <div class="summary-card">
-            <h3>Status</h3>
-            <div class="value status-fail">
-                ✗ FAIL
+        <div class="summary-card wide">
+            <h3>Performance Breakdown</h3>
+            <div class="perf-breakdown-bar">
+                <span class="perf-excellent" style="width: 73.6%;" title="Excellent: 39"></span>
+                <span class="perf-acceptable" style="width: 9.4%;" title="Acceptable: 5"></span>
+                <span class="perf-borderline" style="width: 9.4%;" title="Borderline: 5"></span>
+                <span class="perf-poor" style="width: 7.5%;" title="Poor: 4"></span>
             </div>
-            <div class="subtext">3 validation failures, 3 errors, 0 SLA violations</div>
+            <div class="subtext">39 Excellent • 5 Acceptable • 5 Borderline • 4 Poor (of 53 actions)</div>
         </div>
         
         <div class="summary-card">
@@ -98,7 +108,7 @@
             <div class="value metric-bad">
                 2018ms
             </div>
-            <div class="subtext">Threshold: 600ms</div>
+            <div class="subtext">Threshold: 600.0ms</div>
         </div>
         
         <div class="summary-card">
@@ -114,7 +124,7 @@
             <div class="value status-fail">
                 3
             </div>
-            <div class="subtext">0 action failures, 3 network HTTP errors</div>
+            <div class="subtext">0 action failures, 3 network HTTP errors, 3 validation failures</div>
         </div>
         
         <div class="summary-card">
